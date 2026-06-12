@@ -60,7 +60,7 @@ namespace
         return waferMotor;
     }
 
-    void _startMotor(uint8_t motorIdx, uint32_t freq, uint8_t direction, uint8_t resolution, int32_t numberSteps)
+    void _startMotor(uint8_t motorIdx, uint32_t freq, uint8_t direction, uint8_t resolution, uint32_t numberSteps)
     {
         if (motorIdx > 1)
             return;
@@ -305,11 +305,11 @@ namespace Drawer
         if (count < 6)
             return;
 
-        uint8_t motorIdx   = buff[1] - INDEX_ASCII_MOTOR_TPM;
-        uint8_t direction  = buff[2] == '1' ? HIGH : LOW;
-        uint8_t resolution = buff[3];
-        uint32_t freq      = (uint32_t(buff[4]) << 8) | buff[5];
-        int32_t stepsCount = -1; // default value
+        uint8_t motorIdx    = buff[1] - INDEX_ASCII_MOTOR_TPM;
+        uint8_t direction   = buff[2] == '1' ? HIGH : LOW;
+        uint8_t resolution  = buff[3];
+        uint32_t freq       = (uint32_t(buff[4]) << 8) | buff[5];
+        uint32_t stepsCount = UINT32_MAX; // default value, unsigned int maximum value
 
         if (count >= 10)
             stepsCount = (uint32_t((uint8_t)buff[6]) << 24) |
