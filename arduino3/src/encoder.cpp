@@ -1,8 +1,8 @@
 #include <Arduino.h>
 
+#include "SerialTXHandler.h"
 #include "encoder.h"
 #include "pins.h"
-#include "serialTxHandler.h"
 
 #define MALG_index 0 // ASCII '1' - '1' = 0
 #define MALD_index 1 // ASCII '2' - '1' = 1

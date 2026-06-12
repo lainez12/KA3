@@ -3,8 +3,7 @@
 
 #include "AtomicQueue.hpp"
 
-typedef struct serial_packet_s
-{
+typedef struct serial_packet_s {
     uint8_t msg[64]; // Max 64 chars per message
     uint16_t size;   // The actual number of bytes used in the message to send
 

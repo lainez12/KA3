@@ -6,12 +6,12 @@
 #include <SPI.h>
 #include <string.h>
 
+#include "SerialTXHandler.h"
 #include "autolevel.h"
 #include "drawer.h"
 #include "encoder.h"
 #include "forceSensors.h"
 #include "pins.h"
-#include "serialTxHandler.h"
 
 #define VERSION "? : Arduino3 8p v1.15"
 

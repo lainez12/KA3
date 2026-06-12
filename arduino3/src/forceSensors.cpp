@@ -2,10 +2,10 @@
 
 #include "DueTimer.hpp"
 #include "EMAFilter.hpp"
+#include "SerialTXHandler.h"
 #include "definitions.h"
 #include "forceSensors.h"
 #include "pins.h"
-#include "serialTxHandler.h"
 #include "timerPriorities.h"
 
 #define TOTAL_FORCE_SENSORS         3

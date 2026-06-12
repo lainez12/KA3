@@ -1,9 +1,9 @@
 #include <Arduino.h>
 
+#include "SerialTXHandler.h"
 #include "autolevel.h"
 #include "encoder.h"
 #include "pins.h"
-#include "serialTxHandler.h"
 #include "timerPriorities.h"
 
 #define AUTOLEVEL_MOTORS_COUNT   3

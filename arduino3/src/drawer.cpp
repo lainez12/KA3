@@ -1,9 +1,9 @@
 #include <Arduino.h>
 
+#include "SerialTXHandler.h"
 #include "drawer.h"
 #include "encoder.h"
 #include "pins.h"
-#include "serialTxHandler.h"
 #include "timerPriorities.h"
 
 #define DRAWERS_STOPS_COUNT 7
