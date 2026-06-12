@@ -46,3 +46,5 @@ CMakeUserPresets.json
 *.out
 *.app
 
+.pio
+.vscode
