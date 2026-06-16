@@ -341,11 +341,32 @@ namespace Motors
         // -------------------------------------------------------------------------
 
         /**
+         * @brief Checks if a movement is currently blocked by an active limit switch
+         */
+        bool _isMovementBlocked(uint8_t motorIdx, uint8_t direction)
+        {
+            for (uint8_t i = 0; i < LIMIT_PINS_COUNT; ++i)
+            {
+                // If the limit matching the motor, in our target direction, is currently active
+                if (limitMaps[i].motorIdx == motorIdx &&
+                    limitMaps[i].stopDirection == direction &&
+                    limitStates[i] == true)
+                {
+                    return true; // Movement is blocked
+                }
+            }
+            return false; // Safe to move
+        }
+
+        /**
          * @brief Configures and starts a motor to run a specific number of steps.
          */
         void _startMotor(uint8_t motorIdx, uint32_t freq, uint8_t direction, uint8_t resolution, uint32_t numberSteps)
         {
             DueStepper &motor = steppers[motorIdx];
+
+            if (_isMovementBlocked(motorIdx, direction))
+                return;
 
             motor.setFrequency(freq);
             motor.setDirection(direction);
@@ -357,10 +378,13 @@ namespace Motors
         /**
          * @brief Configures and starts a motor to run until an encoder reaches a specific target.
          */
-        void _startMotorToEncoderPosition(uint8_t index, int32_t target)
+        void _startMotorToEncoderPosition(uint8_t motorIdx, int32_t target)
         {
-            DueStepper &motor       = steppers[index];
-            const uint8_t direction = (target > Encoders::getValue(index)) ? HIGH : LOW;
+            DueStepper &motor       = steppers[motorIdx];
+            const uint8_t direction = (target > Encoders::getValue(motorIdx)) ? HIGH : LOW;
+
+            if (_isMovementBlocked(motorIdx, direction))
+                return;
 
             motor.setFrequency(FREQ_TARGET_MOTOR);
             motor.setDirection(direction);
