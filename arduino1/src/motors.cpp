@@ -305,10 +305,12 @@ namespace Motors
         }
         void limitISRHandlerRightCamX()
         {
+            Com::send(serial_packet_t((uint8_t *)("\x00\x04\x00\x05\x20\x00"), 6));
             _handleLimitISR(RIGHT_CAM_X_RIGHT_LIMIT_IDX);
         }
         void limitISRHandlerRightCamY()
         {
+            Com::send(serial_packet_t((uint8_t *)("\x00\x04\x00\x05\x20\x01"), 6));
             _handleLimitISR(RIGHT_CAM_Y_FRONT_LIMIT_IDX);
         }
         void limitISRHandlerXStagePos()
@@ -394,8 +396,8 @@ namespace Motors
 
         // 3. Initialize Steppers
         void (*stopCbArray[MOTORS_COUNT])(MotorStopReason) = {
-            _onLeftCamXStopped, _onLeftCamYStopped, _onRightCamXStopped, _onRightCamYStopped,
-            _onXStageStopped, _onYStageStopped, _onThStageStopped};
+            &_onLeftCamXStopped, &_onLeftCamYStopped, &_onRightCamXStopped, &_onRightCamYStopped,
+            &_onXStageStopped, &_onYStageStopped, &_onThStageStopped};
 
         for (uint8_t i = 0; i < MOTORS_COUNT; ++i)
         {
