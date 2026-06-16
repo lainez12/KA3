@@ -231,7 +231,7 @@ namespace Motors
 
             uint8_t code = KUtils::limitIndexToByteCode(limitIdx);
 
-            if (code != INVALID_LIMIT_INDEX)
+            if (code == INVALID_LIMIT_INDEX)
                 return;
 
             const uint8_t limitValueByte = (uint8_t)(limitStates[limitIdx] + '0');
@@ -305,12 +305,10 @@ namespace Motors
         }
         void limitISRHandlerRightCamX()
         {
-            Com::send(serial_packet_t((uint8_t *)("\x00\x04\x00\x05\x20\x00"), 6));
             _handleLimitISR(RIGHT_CAM_X_RIGHT_LIMIT_IDX);
         }
         void limitISRHandlerRightCamY()
         {
-            Com::send(serial_packet_t((uint8_t *)("\x00\x04\x00\x05\x20\x01"), 6));
             _handleLimitISR(RIGHT_CAM_Y_FRONT_LIMIT_IDX);
         }
         void limitISRHandlerXStagePos()
