@@ -1,5 +1,6 @@
 #include <SPI.h>
 
+#include "SerialTXHandler.h"
 #include "insolation.h"
 #include "temperature.h"
 
@@ -293,7 +294,7 @@ void stopInsolation(char code)
     buff[1] = 'I';
     buff[2] = code;
 
-    Serial.write(buff, 3);
+    Com::send(serial_packet_t((uint8_t *)&buff[1], 2));
 }
 
 void interruptExposure()
@@ -347,7 +348,7 @@ void moyennageInsol(void)
 
     byte buff[12] = {11, 'I', 'V', multiplex, lowByte(tens[0] >> 8), lowByte(tens[0]), lowByte(offset[0] >> 8), lowByte(offset[0]),
                      lowByte(tens[1] >> 8), lowByte(tens[1]), lowByte(offset[1] >> 8), lowByte(offset[1])};
-    Serial.write(buff, 12);
+    Com::send(serial_packet_t((uint8_t *)&buff[1], 11));
 }
 
 unsigned long getCycleTime()

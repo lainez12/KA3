@@ -1,3 +1,4 @@
+#include "SerialTXHandler.h"
 #include "temperature.h"
 
 static int fanVoltages[NUMBER_IT];
@@ -36,7 +37,7 @@ void checkTemperature(byte *buff, int count)
     if (temp != -1)
     {
         byte buffTemp[6] = {5, 'I', 'T', buff[2], highByte(temp), lowByte(temp)};
-        Serial.write(buffTemp, 6);
+        Com::send(serial_packet_t((uint8_t *)&buffTemp[1], 5));
     }
 }
 
@@ -58,7 +59,7 @@ void checkFans()
     int fanVal   = mean(fanVoltages, NUMBER_IT);
     byte buff[5] = {4, 'I', 'F', highByte(fanVal), lowByte(fanVal)};
 
-    Serial.write(buff, 5);
+    Com::send(serial_packet_t((uint8_t *)&buff[1], 4));
 }
 
 static int mean(int *list, uint32_t size)

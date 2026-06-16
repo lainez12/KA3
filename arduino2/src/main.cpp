@@ -7,6 +7,7 @@
 #include <Wire.h>
 #include <string.h>
 
+#include "SerialTXHandler.h"
 #include "deck.h"
 #include "insolation.h"
 #include "pins.h"
@@ -38,12 +39,13 @@ unsigned long Debounce_5V                                        = 0;
 unsigned long LastStatePow                                       = HIGH;
 bool statePowCheck                                               = true;
 bool StatePow                                                    = true;
-static const uint8_t EMERGENCY_STOP_SEQ[EMERGENCY_STOP_SEQ_SIZE] = {3u, 'E', 0x7F, 0x7F};
+static const uint8_t EMERGENCY_STOP_SEQ[EMERGENCY_STOP_SEQ_SIZE] = {'E', 0x7F, 0x7F};
 unsigned long lastHeartbeatTime                                  = 0;
 
 void setup()
 {
     Serial.begin(115200);
+    Com::send(serial_packet_t((const uint8_t *)VERSION, VERSION_STR_SIZE));
 
     analogWriteResolution(12);
     analogReadResolution(12);
@@ -109,6 +111,8 @@ void loop()
     {
         checkPow();
     }
+
+    Com::processPackets();
 }
 
 static void sendHeartbeat(void)
@@ -118,8 +122,8 @@ static void sendHeartbeat(void)
     if (currentMillis - lastHeartbeatTime >= HEARTBEAT_INTERVAL)
     {
         lastHeartbeatTime      = currentMillis;
-        byte heartbeatPacket[] = {0x02, 'H', 'B'};
-        Serial.write(heartbeatPacket, sizeof(heartbeatPacket));
+        const uint8_t heartbeatPacket[] = {'H', 'B'};
+        Com::send(serial_packet_t(heartbeatPacket, sizeof(heartbeatPacket)));
     }
 }
 
@@ -228,10 +232,7 @@ void serialEvent()
 
 void sendPlainPacketSize(byte *message, int count)
 {
-    byte array[count + 1];
-    memcpy(&array[1], message, count);
-    array[0] = count;
-    Serial.write(array, count + 1);
+    Com::send(serial_packet_t(message, count));
 }
 
 void finishExtinction(void)
@@ -267,8 +268,8 @@ void checkPow(void)
             {
                 stopInsolation('E');
             }
-            byte buff[3] = {2, 'E', 'E'};
-            Serial.write(buff, 3);
+            const uint8_t buff[] = {'E', 'E'};
+            Com::send(serial_packet_t(buff, sizeof(buff)));
             statePowCheck = reading;
             StatePow      = false;
         }
@@ -278,6 +279,6 @@ void checkPow(void)
 
 void triggerEmergencyStop(void)
 {
-    Serial.write(EMERGENCY_STOP_SEQ, EMERGENCY_STOP_SEQ_SIZE);
+    Com::send(serial_packet_t(EMERGENCY_STOP_SEQ, EMERGENCY_STOP_SEQ_SIZE));
     interruptExposure(); // Legacy behaviour
 }

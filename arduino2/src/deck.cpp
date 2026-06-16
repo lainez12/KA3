@@ -1,5 +1,6 @@
 #include <Arduino.h>
 
+#include "SerialTXHandler.h"
 #include "deck.h"
 
 static unsigned int courseDir          = 0;
@@ -45,7 +46,7 @@ void coupleStop()
 {
     stopMotor();
     byte buff[4] = {3, 'C', 'L', '1'};
-    Serial.write(buff, 4);
+    Com::send(serial_packet_t((uint8_t *)&buff[1], 3));
 }
 
 //  -------------------------------------------------------------------------
@@ -168,7 +169,7 @@ void stopForward()
     if (state != stopStates[0])
     {
         byte buff[5] = {4, 'C', '1', 'F', state + '0'};
-        Serial.write(buff, 5);
+        Com::send(serial_packet_t((uint8_t *)&buff[1], 4));
         stopStates[0] = state;
     }
 }
@@ -184,7 +185,7 @@ void stopBackward()
     if (state != stopStates[1])
     {
         byte buff[5] = {4, 'C', '1', 'B', state + '0'};
-        Serial.write(buff, 5);
+        Com::send(serial_packet_t((uint8_t *)&buff[1], 4));
         stopStates[1] = state;
     }
 }
@@ -203,10 +204,10 @@ void VerificationStops()
 void sendAllMotorStops()
 {
     byte buff[5] = {4, 'C', '1', 'F', stopStates[0] + '0'};
-    Serial.write(buff, 5);
+    Com::send(serial_packet_t((uint8_t *)&buff[1], 4));
     buff[3] = 'B';
     buff[4] = stopStates[1] + '0';
-    Serial.write(buff, 5);
+    Com::send(serial_packet_t((uint8_t *)&buff[1], 4));
 }
 
 void setTorqueLimit(byte *buff, int count)
@@ -235,18 +236,18 @@ void setTorqueLimit(byte *buff, int count)
             {
                 torqueLimit[dir] = value;
                 byte buff[7]     = {6, count, 'T', 'F', (dir ? 'B' : 'F'), lowByte(value >> 8), lowByte(value)};
-                Serial.write(buff, 7);
+                Com::send(serial_packet_t((uint8_t *)&buff[1], 6));
             }
             else
             {
                 byte buff[5] = {4, '#', '1', lowByte(value >> 8), lowByte(value)};
-                Serial.write(buff, 5);
+                Com::send(serial_packet_t((uint8_t *)&buff[1], 4));
             }
         }
     }
     else
     {
         byte buff[4] = {3, '#', '2', count};
-        Serial.write(buff, 4);
+        Com::send(serial_packet_t((uint8_t *)&buff[1], 3));
     }
 }
