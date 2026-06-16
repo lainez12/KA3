@@ -1,3 +1,4 @@
+#include "SerialTXHandler.h"
 #include "vacuum.h"
 
 static unsigned long previousStopsVacuumsTime   = 0;
@@ -26,14 +27,14 @@ void sendStateSensor(byte *buff, int count)
         char state        = digitalRead(SM_VACUUM);
         uint8_t stateByte = !state + '0';
         byte buffTemp[5]  = {4, 'V', 'C', buff[3], stateByte};
-        Serial.write(buffTemp, 5);
+        Com::send(serial_packet_t((uint8_t *)&buffTemp[1], 4));
     }
     else if ((buff[3] == 'W') || (buff[3] == 'w'))
     {
         char state        = digitalRead(SW_VACUUM);
         uint8_t stateByte = !state + '0';
         byte buffTemp[5]  = {4, 'V', 'C', buff[3], stateByte};
-        Serial.write(buffTemp, 5);
+        Com::send(serial_packet_t((uint8_t *)&buffTemp[1], 4));
     }
 }
 
@@ -50,7 +51,7 @@ void verificationStatesVacuum()
                 statesVacuum[i]   = state;
                 uint8_t stateByte = !state + '0';
                 byte buff[5]      = {4, 'V', 'C', (i) ? 'W' : 'M', stateByte};
-                Serial.write(buff, 5);
+                Com::send(serial_packet_t((uint8_t *)&buff[1], 4));
             }
         }
 
@@ -70,7 +71,7 @@ void sendCompressedAirValveState(void)
     uint8_t compressedAirValveState = digitalRead(SW_COMPRESSED_AIR) + '0';             // state to ascii
     uint8_t buffTemp[6]             = {5, 'V', 'V', 'A', 'C', compressedAirValveState}; // Active high
 
-    Serial.write(buffTemp, 6);
+    Com::send(serial_packet_t((uint8_t *)&buffTemp[1], 5));
 }
 
 void sendCompressedAirSensorState(void)
@@ -83,5 +84,5 @@ void sendCompressedAirSensorState(bool pinState)
     uint8_t stateByte = !pinState + '0';
     uint8_t buffer[5] = {4, 'V', 'A', 'C', stateByte}; // Active low => invert pin state
 
-    Serial.write(buffer, 5);
+    Com::send(serial_packet_t((uint8_t *)&buffer[1], 4));
 }

@@ -1,5 +1,6 @@
 #include <string.h>
 
+#include "SerialTXHandler.h"
 #include "vacuum.h"
 
 static boolean runnings[2]     = {false, false};
@@ -13,10 +14,7 @@ static unsigned int powersElectrovanne[2]    = {0, 0};
 
 static void sendPlainPacketSizeSolenoid(byte *message, int count)
 {
-    byte array[count + 1];
-    memcpy(&array[1], message, count);
-    array[0] = count;
-    Serial.write(array, count + 1);
+    Com::send(serial_packet_t(message, count));
 }
 
 void setupElectrovanne()

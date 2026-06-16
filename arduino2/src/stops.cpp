@@ -1,3 +1,4 @@
+#include "SerialTXHandler.h"
 #include "stops.h"
 #include <Arduino.h>
 
@@ -24,7 +25,7 @@ void sendAllStopARTDECO()
     for (int i = 0; i < 4; i++)
     {
         byte buff[4] = {3, 'K', i + '1', digitalRead(stopStatesARTDECO[i])};
-        Serial.write(buff, 4);
+        Com::send(serial_packet_t((uint8_t *)&buff[1], 3));
     }
 }
 
@@ -52,14 +53,14 @@ void sendStateStopARTDECO(byte *buff, int count)
             return;
         }
         byte buffOut[4] = {3, 'K', buff[2], digitalRead(stopStatesARTDECO[index]) + '0'};
-        Serial.write(buffOut, 4);
+        Com::send(serial_packet_t((uint8_t *)&buffOut[1], 3));
     }
     else
     {
         for (int i = 0; i < 4; i++)
         {
             byte buff[4] = {3, 'K', i + '1', digitalRead(stopStatesARTDECO[i]) + '0'};
-            Serial.write(buff, 4);
+            Com::send(serial_packet_t((uint8_t *)&buff[1], 3));
         }
     }
 }
@@ -75,7 +76,7 @@ void verificationStopsArdko()
             if (state != StatesArtDeco[i])
             {
                 byte buff[4] = {3, 'K', (i + 1) + '0', state + '0'};
-                Serial.write(buff, 4);
+                Com::send(serial_packet_t((uint8_t *)&buff[1], 3));
                 StatesArtDeco[i] = state;
             }
         }
