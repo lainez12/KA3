@@ -1,14 +1,6 @@
-#include <Arduino.h>
-
-#include "SerialTXHandler.h"
 #include "encoder.h"
+#include "SerialTXHandler.h"
 #include "pins.h"
-
-#define MALG_index 0 // ASCII '1' - '1' = 0
-#define MALD_index 1 // ASCII '2' - '1' = 1
-#define MALA_index 2 // ASCII '3' - '1' = 2
-#define TPM_index  3 // ASCII '4' - '1' = 3
-#define TPW_index  4 // ASCII '5' - '1' = 4
 
 // Local scope
 namespace
@@ -19,13 +11,18 @@ namespace
 
     void sendSingleCoder(uint8_t encoderIdx)
     {
+        // Save the current interrupt state (PRIMASK) and globally disable interrupts.
+        // We do this to create a Critical Section. While a 32-bit read is natively atomic
+        // on the Cortex-M3, reading the value AND clearing the `coderChanged` flag must
+        // occur uninterrupted to prevent race conditions with the encoder ISRs.
         const uint32_t primask = __get_PRIMASK();
 
         __disable_irq();
         coderChanged[encoderIdx] = false;
-        int32_t currentCount     = coderCounts[encoderIdx]; // value copy
+        int32_t currentCount     = coderCounts[encoderIdx]; // Atomic value copy
         __set_PRIMASK(primask);
 
+        // Convert 0-indexed ID back to ASCII '1'-'5' for serial protocol
         const uint8_t buffer[] = {
             (uint8_t)(encoderIdx + '1'),
             (uint8_t)((currentCount >> 24) & 0xFF),
@@ -39,6 +36,7 @@ namespace
 
     void updateEncoder(uint8_t encoderIdx, uint8_t encoderAValue, uint8_t encoderBValue)
     {
+        // Standard Quadrature decoding logic. Called strictly from hardware ISR context.
         if (encoderAValue == encoderBValue)
             coderCounts[encoderIdx] += 1;
         else
@@ -47,30 +45,25 @@ namespace
     }
 
     // ISR callbacks
-
-    void encoderISRHandlerMALG(void)
+    void encoderISRHandlerMALG()
     {
-        updateEncoder(MALG_index, MALG_codA_VAL, MALG_codB_VAL);
+        updateEncoder(Z_LEFT, Z_LEFT_ENC_A_VAL, Z_LEFT_ENC_B_VAL);
     }
-
-    void encoderISRHandlerMALD(void)
+    void encoderISRHandlerMALD()
     {
-        updateEncoder(MALD_index, MALD_codA_VAL, MALD_codB_VAL);
+        updateEncoder(Z_RIGHT, Z_RIGHT_ENC_A_VAL, Z_RIGHT_ENC_B_VAL);
     }
-
-    void encoderISRHandlerMALA(void)
+    void encoderISRHandlerMALA()
     {
-        updateEncoder(MALA_index, MALA_codA_VAL, MALA_codB_VAL);
+        updateEncoder(Z_BACK, Z_BACK_ENC_A_VAL, Z_BACK_ENC_B_VAL);
     }
-
-    void encoderISRHandlerTPM(void)
+    void encoderISRHandlerTPM()
     {
-        updateEncoder(TPM_index, MCM_codA_VAL, MCM_codB_VAL);
+        updateEncoder(MASK_DRAWER, MASK_ENC_A_VAL, MASK_ENC_B_VAL);
     }
-
-    void encoderISRHandlerTPW(void)
+    void encoderISRHandlerTPW()
     {
-        updateEncoder(TPW_index, MCW_codA_VAL, MCW_codB_VAL);
+        updateEncoder(WAFER_DRAWER, WAFER_ENC_A_VAL, WAFER_ENC_B_VAL);
     }
 }
 
@@ -80,11 +73,11 @@ namespace Encoders
     void setup()
     {
         const uint8_t encoderDuePins[ENCODERS_COUNT][2] = {
-            {MALG_codA, MALG_codB},
-            {MALD_codA, MALD_codB},
-            {MALA_codA, MALA_codB},
-            {MCM_codA, MCM_codB},
-            {MCW_codA, MCW_codB},
+            {Z_LEFT_ENC_A_PIN, Z_LEFT_ENC_B_PIN},
+            {Z_RIGHT_ENC_A_PIN, Z_RIGHT_ENC_B_PIN},
+            {Z_BACK_ENC_A_PIN, Z_BACK_ENC_B_PIN},
+            {MASK_ENC_A_PIN, MASK_ENC_B_PIN},
+            {WAFER_ENC_A_PIN, WAFER_ENC_B_PIN},
         };
 
         for (uint8_t index = 0; index < ENCODERS_COUNT; ++index)
@@ -93,12 +86,24 @@ namespace Encoders
             pinMode(encoderDuePins[index][1], INPUT);
         }
 
-        // Interruptions - use digitalPinToInterrupt to map pin -> interrupt num
-        attachInterrupt(digitalPinToInterrupt(MALG_codA), &encoderISRHandlerMALG, CHANGE);
-        attachInterrupt(digitalPinToInterrupt(MALD_codA), &encoderISRHandlerMALD, CHANGE);
-        attachInterrupt(digitalPinToInterrupt(MALA_codA), &encoderISRHandlerMALA, CHANGE);
-        attachInterrupt(digitalPinToInterrupt(MCM_codA), &encoderISRHandlerTPM, CHANGE);
-        attachInterrupt(digitalPinToInterrupt(MCW_codA), &encoderISRHandlerTPW, CHANGE);
+        // Hardware Interrupts
+        attachInterrupt(digitalPinToInterrupt(Z_LEFT_ENC_A_PIN), &encoderISRHandlerMALG, CHANGE);
+        attachInterrupt(digitalPinToInterrupt(Z_RIGHT_ENC_A_PIN), &encoderISRHandlerMALD, CHANGE);
+        attachInterrupt(digitalPinToInterrupt(Z_BACK_ENC_A_PIN), &encoderISRHandlerMALA, CHANGE);
+        attachInterrupt(digitalPinToInterrupt(MASK_ENC_A_PIN), &encoderISRHandlerTPM, CHANGE);
+        attachInterrupt(digitalPinToInterrupt(WAFER_ENC_A_PIN), &encoderISRHandlerTPW, CHANGE);
+    }
+
+    void loop()
+    {
+        static uint32_t prevTime = 0;
+        uint32_t now             = millis();
+
+        if (now - prevTime >= 50) // Send encoders value every 50ms
+        {
+            sendChanged();
+            prevTime = now;
+        }
     }
 
     void sendAll()
@@ -121,32 +126,33 @@ namespace Encoders
         if (count != 6)
             return;
 
+        // Extract ID directly from buffer, converting ASCII '1'-'5' to 0-4
         const uint8_t idx = buff[1] - '1';
+        if (idx >= ENCODERS_COUNT)
+            return;
 
+        // Reconstruct the 32-bit signed integer from the Big-Endian serial payload
         coderCounts[idx] =
             ((int32_t)((uint8_t)buff[2]) << 24) |
             ((int32_t)((uint8_t)buff[3]) << 16) |
             ((int32_t)((uint8_t)buff[4]) << 8) |
             (uint8_t)buff[5];
+
         coderChanged[idx] = true;
-        sendSingleCoder(idx); // Send update through serial
+        sendSingleCoder(idx);
     }
 
     volatile int32_t *getCountPtr(MotorId id)
     {
-        const uint8_t idx = id - '1';
-
-        if (idx >= ENCODERS_COUNT)
+        if (id >= ENCODERS_COUNT)
             return nullptr; // Out of bounds
-        return &coderCounts[idx];
+        return &coderCounts[id];
     }
 
     int32_t getValue(MotorId id)
     {
-        const uint8_t idx = id - '1';
-
-        if (idx > 4)
-            return INT32_MIN; // Error value
-        return coderCounts[idx];
+        if (id >= ENCODERS_COUNT)
+            return INT32_MIN;
+        return coderCounts[id];
     }
 }

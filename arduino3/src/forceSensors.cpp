@@ -6,7 +6,6 @@
 #include "definitions.h"
 #include "forceSensors.h"
 #include "pins.h"
-#include "timerPriorities.h"
 
 #define TOTAL_FORCE_SENSORS         3
 #define FORCE_MEASUREMENT_FREQUENCY 500 // Hz
@@ -15,7 +14,7 @@
 namespace
 {
     // Pins array
-    const int PIEZO[TOTAL_FORCE_SENSORS] = {CALG, CALD, CALA};
+    const int PIEZO[TOTAL_FORCE_SENSORS] = {FORCE_SENS_LEFT_PIN, FORCE_RIGHT_SENS_PIN, FORCE_BACK_SENS_PIN};
     // State variables
     uint32_t lastMeasureTimestamp                         = 0;
     volatile bool forceSensorEnabled[TOTAL_FORCE_SENSORS] = {false, false, false};
@@ -26,6 +25,9 @@ namespace
         return analogRead(PIEZO[sensorIdx]);
     }
 
+    // Instantiates Exponential Moving Average (EMA) filters for the 3 ADCs.
+    // Fixed-point math is used internally to avoid FPU overhead.
+    // Alpha/Sensitivity is tuned for a 500Hz sampling rate.
     EMAFilter forceFilters[TOTAL_FORCE_SENSORS] = {
         EMAFilter([]() { return getADCValue(0); }, 200),
         EMAFilter([]() { return getADCValue(1); }, 200),
@@ -47,12 +49,16 @@ namespace
     {
         if (isAnySensorEnabled())
         {
+            // Reset filter history to prevent huge delta spikes upon reactivation
             for (uint8_t idx = 0; idx < TOTAL_FORCE_SENSORS; ++idx)
                 forceFilters[idx].reset();
+
+            // Starts the Timer/Counter peripheral
             forceSensorMeasureTimer.start();
         }
         else
         {
+            // Power saving: disable hardware timer when not explicitly requested
             forceSensorMeasureTimer.stop();
         }
     }
@@ -61,6 +67,7 @@ namespace
     {
         for (uint8_t idx = 0; idx < TOTAL_FORCE_SENSORS; ++idx)
         {
+            // Executed at FORCE_MEASUREMENT_FREQUENCY (500Hz) inside the TC ISR.
             if (forceSensorEnabled[idx])
                 forceFilters[idx].measure();
         }
@@ -89,9 +96,9 @@ namespace ForceSensors
     // Force sensors setup function
     void setup(void)
     {
-        pinMode(CALG, INPUT);
-        pinMode(CALD, INPUT);
-        pinMode(CALA, INPUT);
+        pinMode(FORCE_SENS_LEFT_PIN, INPUT);
+        pinMode(FORCE_RIGHT_SENS_PIN, INPUT);
+        pinMode(FORCE_BACK_SENS_PIN, INPUT);
 
         forceSensorMeasureTimer.begin(FORCE_MEASUREMENT_FREQUENCY, &measureAll, nullptr);
 

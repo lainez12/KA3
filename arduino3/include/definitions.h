@@ -1,6 +1,16 @@
 #ifndef KUB_DEFINITIONS_H
 #define KUB_DEFINITIONS_H
 
+#define VERSION      "?: Arduino3 8i v2.0"
+#define VERSION_SIZE 19
+
+#define MAXIMUM_SERIAL_INSTRUCTION_SIZE 64
+
 #define FORCE_SENSORS_MEASURE_TIMER_IDX 7
+
+// NVIC Timers priorities
+#define ENCODER_NVIC_PRIORITY      0
+#define STEPPER_NVIC_PRIORITY      1
+#define FORCE_SENSOR_NVIC_PRIORITY 2
 
 #endif // KUB_DEFINITIONS_H
