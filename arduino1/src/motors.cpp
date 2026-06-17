@@ -80,8 +80,9 @@ namespace Motors
          * @brief Sets the hardware pins corresponding to the micro-stepping resolution.
          *
          * TRICKY PART:
-         * The bitwise logic `(ufrac & 0x04) | (ufrac & 0x20)` checks if the fraction is
-         * exactly 4 or 32 to detect if a floating pin is needed.
+         * Certain stepper drivers use tri-state logic. The bitwise logic
+         * `(ufrac & 0x04) | (ufrac & 0x20)` checks if the fraction is exactly 4 or 32
+         * to detect if setting the pin to INPUT (High-Z floating state) is required.
          */
         void _setStepperResolution(StepFraction frac, uint32_t *resolutionPins)
         {
@@ -182,7 +183,7 @@ namespace Motors
          */
         void _sendMotorStoppedMsg(uint8_t motorIdx, MotorStopReason reason)
         {
-            uint8_t asciiCode = KUtils::motorIndexToAsciiByte(motorIdx);
+            uint8_t asciiCode = KUtils::motorIndexToByteCode(motorIdx);
 
             if (asciiCode == INVALID_MOTOR_INDEX)
                 return;
@@ -243,7 +244,7 @@ namespace Motors
         /**
          * @brief Reads the physical pin state of a limit switch.
          */
-        uint8_t _getLimitPin(uint8_t limitIdx)
+        uint8_t _getLimitPinValue(uint8_t limitIdx)
         {
             return digitalRead(limitPins[limitIdx]); // Active low ?
         }
@@ -254,7 +255,7 @@ namespace Motors
          */
         void _syncLimitPinState(uint8_t limitIdx)
         {
-            const bool state = _getLimitPin(limitIdx);
+            const bool state = _getLimitPinValue(limitIdx);
 
             if (state != limitStates[limitIdx])
             {
@@ -277,8 +278,7 @@ namespace Motors
 
         /**
          * @brief Master logic for limit switch interrupts.
-         * When an interrupt fires, this function looks up which motor this switch belongs to,
-         * checks if the motor is currently running towards the switch, and if so, forces a stop.
+         * Handles both motor collision limits and passive sensors seamlessly in O(1) time.
          */
         void _handleLimitISR(uint8_t limitIdx)
         {
@@ -443,10 +443,10 @@ namespace Motors
         static uint32_t prevLimitCheck = 0;
         const uint32_t now             = millis();
 
-        // Run the safety net
+        // Software Fallback (Safety Net)
         if (now - prevLimitCheck >= 100)
         {
-            // Sync states to catch any missed interrupts (e.g., limits triggered manually while off)
+            // Sync states to catch any missed interrupts (e.g., EMI glitch causing missed EXTI edge)
             for (uint8_t i = 0; i < LIMIT_PINS_COUNT; ++i)
                 _syncLimitPinState(i);
 
@@ -477,7 +477,7 @@ namespace Motors
         if (!alignmentEnabled || count < 6)
             return;
 
-        const uint8_t idx = KUtils::asciiByteToMotorIndex(buff[1]);
+        const uint8_t idx = KUtils::motorByteCodeToIndex(buff[1]);
 
         if (idx == INVALID_MOTOR_INDEX)
             return;
@@ -490,6 +490,7 @@ namespace Motors
         if (freq == 0)
             return;
 
+        // We reconstruct the 32-bit unsigned integer using Big-Endian bitwise shifts.
         if (count >= 10)
             stepsCount = (uint32_t((uint8_t)buff[6]) << 24) |
                          (uint32_t((uint8_t)buff[7]) << 16) |
@@ -504,7 +505,7 @@ namespace Motors
         if (!alignmentEnabled || count < 4)
             return;
 
-        const uint8_t motorIndex = KUtils::asciiByteToMotorIndex(buff[1]);
+        const uint8_t motorIndex = KUtils::motorByteCodeToIndex(buff[1]);
 
         if (motorIndex == INVALID_MOTOR_INDEX || motorIndex >= MOTORS_COUNT)
             return; // Invalid index
@@ -540,7 +541,7 @@ namespace Motors
         if (count < 3)
             return;
 
-        const uint8_t idx = KUtils::asciiByteToMotorIndex(buff[1]);
+        const uint8_t idx = KUtils::motorByteCodeToIndex(buff[1]);
 
         if (idx == INVALID_MOTOR_INDEX || idx >= MOTORS_COUNT)
             return; // Invalid index

@@ -7,6 +7,8 @@ namespace FocalLed
 {
     void setup()
     {
+        // Configure hardware SPI for the LED/Focal driver boards.
+        // SPI_MODE3 (CPOL=1, CPHA=1) and Clock Divider 21 (~4MHz on 84MHz bus).
         SPI.begin(LEFT_SLAVE);
         SPI.begin(RIGHT_SLAVE);
         SPI.setDataMode(LEFT_SLAVE, SPI_MODE3);
@@ -23,8 +25,13 @@ namespace FocalLed
         {
             byte first  = 0;
             byte second = 0;
+
+            // Build the SPI control byte bit-by-bit based on protocol specs:
+            // Bit 7: Target selection (0 = LED, 1 = Focale)
             bitWrite(first, 7, (buff[2] == 'F' || buff[2] == 'f'));
+            // Bit 5: Gain management (0 = gain of 2, 1 = gain of 1)
             bitWrite(first, 5, 1);
+            // Bit 4: Shutdown (0 = output disabled, 1 = output enabled)
             bitWrite(first, 4, buff[3] == '1');
 
             int value = 0;

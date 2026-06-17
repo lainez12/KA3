@@ -3,7 +3,7 @@
 namespace KUtils
 {
 
-    uint8_t asciiByteToMotorIndex(char byte)
+    uint8_t motorByteCodeToIndex(char byte)
     {
         if (byte < '1' || byte > '8' || byte == '7')
             return INVALID_MOTOR_INDEX; // error
@@ -13,7 +13,7 @@ namespace KUtils
         return byte - '1';
     }
 
-    char motorIndexToAsciiByte(uint8_t idx)
+    char motorIndexToByteCode(uint8_t idx)
     {
         if (idx > 6)
             return INVALID_MOTOR_INDEX; // error
@@ -35,7 +35,7 @@ namespace KUtils
         return index;
     }
 
-    uint8_t stopByteCodeToIndex(uint8_t byteCode)
+    uint8_t limitByteCodeToIndex(uint8_t byteCode)
     {
         if (byteCode == 0x06 || byteCode == 0x0a || byteCode > 0x0b)
             return INVALID_LIMIT_INDEX;

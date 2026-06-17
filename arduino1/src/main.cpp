@@ -39,7 +39,7 @@ void orderStopMotor(char *buff, int count)
     if (count < 2)
         return;
 
-    const uint8_t idx = KUtils::asciiByteToMotorIndex(buff[1]);
+    const uint8_t idx = KUtils::motorByteCodeToIndex(buff[1]);
     if (idx == INVALID_MOTOR_INDEX)
         return; // Invalid index
 
@@ -52,6 +52,9 @@ void orderStopMotor(char *buff, int count)
 
 void serialEvent()
 {
+    // Static state machine variables to parse incoming UART packets asynchronously.
+    // This entirely replaces blocking calls like Serial.readBytes(), ensuring the
+    // main loop (and polling tasks) never stall while waiting for a packet to finish arriving.
     static bool rxReading        = false; // false: Waiting for Length, true: Reading Data
     static uint8_t rxExpectedLen = 0;     // Number of bytes to read
     static int rxIndex           = 0;     // Current buffer position

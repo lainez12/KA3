@@ -10,6 +10,9 @@ namespace
 
     void sendSingleCoder(uint8_t encoderIdx)
     {
+        // Save the current interrupt state (PRIMASK) and globally disable interrupts.
+        // Reading the value AND clearing the `coderChanged` flag must occur uninterrupted
+        // to prevent race conditions with the encoder ISRs.
         const uint32_t primask = __get_PRIMASK();
 
         __disable_irq();
@@ -17,7 +20,7 @@ namespace
         int32_t currentCount     = coderCounts[encoderIdx];
         __set_PRIMASK(primask);
 
-        const uint8_t motorByteCode = KUtils::motorIndexToAsciiByte(encoderIdx);
+        const uint8_t motorByteCode = KUtils::motorIndexToByteCode(encoderIdx);
         if (motorByteCode == INVALID_MOTOR_INDEX)
             return;
 
@@ -34,6 +37,7 @@ namespace
 
     void updateEncoder(uint8_t encoderIdx, uint8_t encoderAValue, uint8_t encoderBValue)
     {
+        // Standard Quadrature decoding logic. Called strictly from hardware ISR context.
         if (encoderAValue == encoderBValue)
             coderCounts[encoderIdx] += 1;
         else
@@ -131,7 +135,7 @@ namespace Encoders
         if (count < 6)
             return;
 
-        const uint8_t idx = KUtils::asciiByteToMotorIndex(buff[1]);
+        const uint8_t idx = KUtils::motorByteCodeToIndex(buff[1]);
 
         if (idx == INVALID_MOTOR_INDEX || idx >= ENCODERS_COUNT)
             return;
