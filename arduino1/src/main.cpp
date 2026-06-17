@@ -19,7 +19,7 @@ void setup()
     Serial.begin(115200);
 
     // Announce identity natively using TX handler
-    Com::send(serial_packet_t((uint8_t *)VERSION, 20));
+    Com::send(serial_packet_t((uint8_t *)VERSION, VERSION_SIZE));
 
     FocalLed::setup();
     Encoders::setup();
@@ -30,6 +30,7 @@ void loop()
 {
     Motors::loop();
     Encoders::loop();
+
     Com::processPackets();
 }
 

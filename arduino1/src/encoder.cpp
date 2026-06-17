@@ -104,7 +104,7 @@ namespace Encoders
         static uint32_t prevTime = 0;
         uint32_t now             = millis();
 
-        if (now - prevTime >= 50)
+        if (now - prevTime >= 50) // Send encoders value every 50ms
         {
             sendChanged();
             prevTime = now;

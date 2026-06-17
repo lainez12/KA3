@@ -1,10 +1,10 @@
 #ifndef DEFINITIONS_H
 #define DEFINITIONS_H
 
-#define VERSION "? : Arduino1 8p v2.0"
+#define VERSION      "? : Arduino1 8i v2.0"
+#define VERSION_SIZE 20
 
 #define MAXIMUM_SERIAL_INSTRUCTION_SIZE 64
-#define ANALOG_LIMIT                    310
 
 // Stepper / Encoder config
 #define MOTOR_TARGET_MOVEMENT_TOLERANCE 3
