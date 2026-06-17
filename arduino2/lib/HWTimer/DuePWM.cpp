@@ -1,4 +1,5 @@
 #include "DuePWM.hpp"
+#include "DuePWM_Pins.hpp"
 
 DuePWM::DuePWM(uint8_t arduinoPin)
 {
@@ -15,34 +16,29 @@ bool DuePWM::begin(uint32_t frequency, uint32_t maxResolution)
     uint32_t pinMask;
     uint32_t peripheral;
 
-    if (_pin == 7) {
-        // Pin 7 on Arduino Due is PC23, PWM Channel 6, Peripheral B
-        pioPort = PIOC;
-        pinMask = PIO_PC23;
-        peripheral = PIO_ABSR_P23; // Selects Peripheral B
-        _channel = 6;
-    } 
-    else if (_pin == 8) {
-        // Pin 8 on Arduino Due is PC22, PWM Channel 5, Peripheral B
-        pioPort = PIOC;
-        pinMask = PIO_PC22;
-        peripheral = PIO_ABSR_P22; // Selects Peripheral B
-        _channel = 5;
+    for (uint8_t i = 0; i < NUM_HW_PWM_PINS; i++) {
+        if (due_hw_pwm_pins[i].arduinoPin == _pin) {
+            pinData = &due_hw_pwm_pins[i];
+            break;
+        }
     }
-    else {
-        // To implement more pins, you must search the Due's mapping table
+
+    if (pinData == nullptr) {
         return false; 
     }
+
+    _channel = pinData->channel;
 
     // Turn on the PWM controller's clock (The PWM ID is 36)
     // Since 36 is greater than 31, we use PCER1 (Peripheral Clock Enable Register 1)
     PMC->PMC_PCER1 |= (1 << (ID_PWM - 32));
 
     // Disconnect the pin from the normal control (GPIO) and assign it to the PWM peripheral
-    pioPort->PIO_PDR = pinMask; // Disable Register
+    pinData->pioPort->PIO_PDR = pinData->pinMask; // Disable Register
     
     // Assign to the correct peripheral (A or B; on the Due, almost all PWMs are MUX B)
-    pioPort->PIO_ABSR |= peripheral; 
+    //pioPort->PIO_ABSR |= peripheral;
+    pinData->pioPort->PIO_ABSR |= pinData->pinMask;
 
     // Configure the PWM master clock (Clock A)
     // We use the master clock (84 MHz) divided by a prescaler.
