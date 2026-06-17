@@ -363,10 +363,10 @@ namespace Motors
          */
         void _startMotor(uint8_t motorIdx, uint32_t freq, uint8_t direction, uint8_t resolution, uint32_t numberSteps)
         {
-            DueStepper &motor = steppers[motorIdx];
-
             if (_isMovementBlocked(motorIdx, direction))
                 return;
+
+            DueStepper &motor = steppers[motorIdx];
 
             motor.setFrequency(freq);
             motor.setDirection(direction);
@@ -380,11 +380,12 @@ namespace Motors
          */
         void _startMotorToEncoderPosition(uint8_t motorIdx, int32_t target)
         {
-            DueStepper &motor       = steppers[motorIdx];
             const uint8_t direction = (target > Encoders::getValue(motorIdx)) ? HIGH : LOW;
 
             if (_isMovementBlocked(motorIdx, direction))
                 return;
+
+            DueStepper &motor = steppers[motorIdx];
 
             motor.setFrequency(FREQ_TARGET_MOTOR);
             motor.setDirection(direction);

@@ -1,5 +1,5 @@
 /*
- *  Firmware for the Kub3.8i "arduino 1"
+ *  Arduino 1 (Kub3.8i) firmware
  */
 
 #include <Arduino.h>
