@@ -5,7 +5,7 @@
 
 void setupArtDecoStops();
 void sendAllStopARTDECO();
-void sendStateStopARTDECO(byte *buff, int count);
+void sendStateStopARTDECO(char *buff, int count);
 void verificationStopsArdko();
 
 #endif // STOPS_H

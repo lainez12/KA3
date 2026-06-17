@@ -39,7 +39,7 @@ void setupElectrovanne()
     digitalWrite(SW_COMPRESSED_AIR, LOW);
 }
 
-void setSolenoid(byte *buff, int count)
+void setSolenoid(char *buff, int count)
 {
     if (count < 5)
     {
@@ -106,7 +106,7 @@ void setSolenoid(byte *buff, int count)
     }
 }
 
-void toggleCompressedAirValveState(byte *buff, int count)
+void toggleCompressedAirValveState(char *buff, int count)
 {
     if (count > 3)
         return;
@@ -121,7 +121,7 @@ void toggleCompressedAirValveState(byte *buff, int count)
     }
 }
 
-void getSolenoidPower(byte *buff, int count)
+void getSolenoidPower(char *buff, int count)
 {
 
     if (count >= 3)

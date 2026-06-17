@@ -78,7 +78,7 @@ void loopInsolation()
     {
         /// checkFans();
         // checkTemperatures
-        byte buff[3] = {'?', 'T', '0'};
+        char buff[3] = {'?', 'T', '0'};
         checkTemperature(buff, 3);
         buff[2] = '1';
         checkTemperature(buff, 3);
@@ -104,7 +104,7 @@ void multiplexFeedback()
     digitalWrite(GET_A2_C, bitRead(multiplex, 2));
 }
 
-void initInsolation(byte *buff, int count)
+void initInsolation(char *buff, int count)
 {
     if (count >= 5)
     {

@@ -10,12 +10,12 @@
 #include "SerialTXHandler.h"
 #include "deck.h"
 #include "insolation.h"
+#include "definitions.h"
 #include "pins.h"
 #include "stops.h"
 #include "temperature.h"
 #include "vacuum.h"
 
-#define VERSION          "? : Arduino2 8p v1.15"
 #define VERSION_STR_SIZE 21u
 
 #define INTERRUP_SOFT 1
@@ -41,6 +41,10 @@ bool statePowCheck                                               = true;
 bool StatePow                                                    = true;
 static const uint8_t EMERGENCY_STOP_SEQ[EMERGENCY_STOP_SEQ_SIZE] = {'E', 0x7F, 0x7F};
 unsigned long lastHeartbeatTime                                  = 0;
+
+
+void processInstruction(char *buff, uint32_t size);
+
 
 void setup()
 {
@@ -127,106 +131,140 @@ static void sendHeartbeat(void)
     }
 }
 
+// ---------------------------------------------------------------------
+// Communication Core
+// ---------------------------------------------------------------------
+
 void serialEvent()
 {
-    byte buff[64] = {0};
+    // Static state machine variables to parse incoming UART packets asynchronously.
+    // This entirely replaces blocking calls like Serial.readBytes(), ensuring the
+    // main loop (and polling tasks) never stall while waiting for a packet to finish arriving.
+    static bool rxReading        = false; // false: Waiting for Length, true: Reading Data
+    static uint8_t rxExpectedLen = 0;     // Number of bytes to read
+    static int rxIndex           = 0;     // Current buffer position
+    static char rxBuffer[MAXIMUM_SERIAL_INSTRUCTION_SIZE];
 
-    int nb    = int(Serial.read());
-    int count = Serial.readBytes((char *)buff, nb);
-
-    if (count == nb)
+    while (Serial.available() > 0)
     {
-        switch (buff[0])
+        byte incoming = Serial.read();
+
+        if (!rxReading)
         {
-        case 'A':
+            rxExpectedLen = incoming;
+            rxIndex       = 0;
+
+            if (rxExpectedLen > 0 && rxExpectedLen < MAXIMUM_SERIAL_INSTRUCTION_SIZE)
+                rxReading = true;
+        }
+        else
         {
-            if (buff[1] == 'C' || buff[1] == 'c')
+            rxBuffer[rxIndex++] = (char)incoming;
+
+            if (rxIndex >= rxExpectedLen)
             {
-                toggleCompressedAirValveState(buff, count);
+                processInstruction(rxBuffer, rxExpectedLen);
+                rxReading = false;
             }
-            break;
         }
-        case 'C':
+    }
+}
+
+void processInstruction(char *buff, uint32_t size)
+{
+    if (size == 0)
+        return;
+
+    switch (buff[0])
+    {
+    case 'A':
+    {
+        if (size > 1 && (buff[1] == 'C' || buff[1] == 'c'))
         {
-            moveContinuousMotor(buff, count);
-            break;
+            toggleCompressedAirValveState(buff, size);
         }
-        case 'T':
+        break;
+    }
+    case 'C':
+    {
+        moveContinuousMotor(buff, size);
+        break;
+    }
+    case 'T':
+    {
+        setTorqueLimit(buff, size);
+        break;
+    }
+    case 'V':
+    {
+        if (size > 1 && (buff[1] == 'E' || buff[1] == 'e'))
         {
-            setTorqueLimit(buff, count);
-            break;
+            setSolenoid(buff, size);
         }
-        case 'V':
+        break;
+    }
+    case 'I':
+    {
+        if (getCycleTime() == 0 && getNumberCycles() == 0)
         {
-            if (buff[1] == 'E' || buff[1] == 'e')
+            initInsolation(buff, size);
+        }
+        break;
+    }
+    case 'S':
+    {
+        stopInsolation('E');
+        break;
+    }
+    case 'E':
+    {
+        finishExtinction();
+        break;
+    }
+    case '?':
+    {
+        if (size >= 2)
+        {
+            if (buff[1] == 'K' || buff[1] == 'k')
             {
-                setSolenoid(buff, count);
+                sendStateStopARTDECO(buff, size);
             }
-            break;
-        }
-        case 'I':
-        {
-            if (getCycleTime() == 0 && getNumberCycles() == 0)
+            else if ((buff[1] == 'V' || buff[1] == 'v'))
             {
-                initInsolation(buff, count);
+                if (size >= 3 && (buff[2] == 'C' || buff[2] == 'c'))
+                {
+                    sendStateSensor(buff, size);
+                }
+                else if (size >= 3 && (buff[2] == 'E' || buff[2] == 'e'))
+                {
+                    getSolenoidPower(buff, size);
+                }
             }
-            break;
-        }
-        case 'S':
-        {
-            stopInsolation('E');
-            break;
-        }
-        case 'E':
-        {
-            finishExtinction();
-            break;
-        }
-        case '?':
-        {
-            if (count >= 2)
+            else if ((buff[1] == 'A' || buff[1] == 'a'))
             {
-                if (buff[1] == 'K' || buff[1] == 'k')
+                if (size >= 3 && (buff[2] == 'C' || buff[2] == 'c'))
                 {
-                    sendStateStopARTDECO(buff, count);
-                }
-                else if ((buff[1] == 'V' || buff[1] == 'v'))
-                {
-                    if (buff[2] == 'C' || buff[2] == 'c')
-                    {
-                        sendStateSensor(buff, count);
-                    }
-                    else if (buff[2] == 'E' || buff[2] == 'e')
-                    {
-                        getSolenoidPower(buff, count);
-                    }
-                }
-                else if ((buff[1] == 'A' || buff[1] == 'a'))
-                {
-                    if (buff[2] == 'C' || buff[2] == 'c')
-                    {
-                        sendCompressedAirValveState();
-                        sendCompressedAirSensorState();
-                    }
-                }
-                else if (buff[1] == 'C' || buff[1] == 'c')
-                {
-                    sendAllMotorStops();
-                }
-                else if ((buff[1] == 'T' || buff[1] == 't'))
-                {
-                    checkTemperature(buff, count);
+                    sendCompressedAirValveState();
+                    sendCompressedAirSensorState();
                 }
             }
-            else
+            else if (buff[1] == 'C' || buff[1] == 'c')
             {
-                sendPlainPacketSize((byte *)VERSION, VERSION_STR_SIZE);
+                sendAllMotorStops();
             }
-            break;
+            else if ((buff[1] == 'T' || buff[1] == 't'))
+            {
+                checkTemperature(buff, size);
+            }
         }
-        default:
-            break;
+        else
+        {
+            sendPlainPacketSize((byte *)VERSION, VERSION_STR_SIZE);
         }
+        break;
+    }
+    default:
+        break;
     }
 }
 

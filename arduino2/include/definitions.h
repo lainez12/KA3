@@ -1,0 +1,9 @@
+#ifndef KUB_DEFINITIONS_H
+#define KUB_DEFINITIONS_H
+
+#define VERSION      "?: Arduino2 8i v2.0"
+#define VERSION_SIZE 19
+
+#define MAXIMUM_SERIAL_INSTRUCTION_SIZE 64
+
+#endif // KUB_DEFINITIONS_H

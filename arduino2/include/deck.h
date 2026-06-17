@@ -19,8 +19,8 @@ void VerificationStops();
 
 void sendAllMotorStops();
 
-void moveContinuousMotor(byte *buff, int count);
-void setTorqueLimit(byte *buff, int count);
+void moveContinuousMotor(char *buff, int count);
+void setTorqueLimit(char *buff, int count);
 
 void lockDeck();
 void unlockDeck();

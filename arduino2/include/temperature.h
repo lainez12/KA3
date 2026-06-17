@@ -6,7 +6,7 @@
 
 #define NUMBER_IT 5
 
-void checkTemperature(byte *buff, int count);
+void checkTemperature(char *buff, int count);
 void checkFans();
 void clearArrayMoyennageTempVoltage();
 void clearArrayMoyennageFanVoltage();

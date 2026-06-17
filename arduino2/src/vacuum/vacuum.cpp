@@ -14,7 +14,7 @@ void setupVacuumsensor()
     pinMode(SW_SENSOR_COMPRESSED_AIR, INPUT);
 }
 
-void sendStateSensor(byte *buff, int count)
+void sendStateSensor(char *buff, int count)
 {
     // TODO review
     if (count != 4)

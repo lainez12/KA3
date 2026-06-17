@@ -29,7 +29,7 @@ void sendAllStopARTDECO()
     }
 }
 
-/*void sendStateStopARTDECO(byte* buff, int count){
+/*void sendStateStopARTDECO(char* buff, int count){
     if(count != 3)
     {
         return;
@@ -43,7 +43,7 @@ void sendAllStopARTDECO()
     Serial.write(buffOut, 4);
 }*/
 
-void sendStateStopARTDECO(byte *buff, int count)
+void sendStateStopARTDECO(char *buff, int count)
 {
     if (count >= 3)
     {

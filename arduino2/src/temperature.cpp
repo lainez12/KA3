@@ -5,7 +5,7 @@ static int fanVoltages[NUMBER_IT];
 
 static int mean(int *list, uint32_t size);
 
-void checkTemperature(byte *buff, int count)
+void checkTemperature(char *buff, int count)
 {
     if (count < 3)
     {

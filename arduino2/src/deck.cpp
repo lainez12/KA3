@@ -2,20 +2,27 @@
 
 #include "SerialTXHandler.h"
 #include "deck.h"
+#include "DueDCMotor.hpp"
 
-static unsigned int courseDir          = 0;
-static unsigned long prevCoupleTimes   = 0;
+
+static DueDCMotor deckMotor(
+    due_dc_motor_pins_t{
+        .disable   = DECK_DISABLE,
+        .direction = DECK_DIRECTION,
+        .pwm       = DECK_CLOCK,
+        .torque    = DECK_COUPLE
+    }
+);
+
+static unsigned int courseDir = 0;
+static unsigned long prevCoupleTimes = 0;
 static unsigned long previousStopsTime = 0;
-static unsigned int stopStates[2]      = {HIGH, HIGH};
-static int torqueLimit[2]              = {2750, 2481};
+static unsigned int stopStates[2] = {HIGH, HIGH};
+static int torqueLimit[2] = {2750, 2481};
 
 void setupDeck()
 {
-    pinMode(DECK_DIRECTION, OUTPUT);
-    pinMode(DECK_DISABLE, OUTPUT);
-    pinMode(DECK_CLOCK, OUTPUT);
-    pinMode(DECK_INSOLSTOP, INPUT);
-    pinMode(DECK_ALIGNSTOP, INPUT);
+    deckMotor.setup(20000, 4095);
 
     digitalWrite(DECK_DISABLE, HIGH);
     digitalWrite(DECK_DIRECTION, HIGH);
@@ -30,12 +37,8 @@ void loopDeckTorque()
     if (prevCoupleTimes > 0 && (unsigned long)(millis() - prevCoupleTimes) >= 200)
     {
         prevCoupleTimes = (millis() == 0 ? 1 : millis());
-        int dir;
-        if (DECK_DIRECTION == 1)
-            dir = 1;
-        else
-            dir = 0;
-        if (analogRead(DECK_COUPLE) > torqueLimit[dir])
+        int dir = (courseDir == HIGH) ? 1 : 0;
+        if (deckMotor.readTorque() > torqueLimit[dir])
         {
             coupleStop();
         }
@@ -45,63 +48,15 @@ void loopDeckTorque()
 void coupleStop()
 {
     stopMotor();
-    byte buff[4] = {3, 'C', 'L', '1'};
-    Com::send(serial_packet_t((uint8_t *)&buff[1], 3));
+    byte buff[] = {'C', 'L', '1'};
+    Com::send(serial_packet_t((uint8_t *)&buff[1], sizeof(buff)));
 }
 
 //  -------------------------------------------------------------------------
 //                      CC Motors
 //  -------------------------------------------------------------------------
 
-/*void moveContinuousMotor(byte* buff, int count)
-{
-  if (count >= 3)
-  {
-  int partIndex;
-  if (buff[1] == 'D' || buff[1] == 'd')
-    partIndex = 0;
-  else
-    partIndex = 1;
-
-  if (buff[2] == 'S' || buff[2] == 's')
-  {
-    stopMotor(partIndex);
-  }
-  else if(drawerEnabled || partIndex == 1)
-  {
-    boolean dir;
-    if (buff[2] == 'F' || buff[2] == 'f')
-    dir = LOW;
-    else
-    dir = HIGH;
-
-    if ((dir == LOW && digitalRead(forwardStops[partIndex]) == LOW) || (dir == HIGH && digitalRead(backwardStops[partIndex]) == LOW))
-    {
-    digitalWrite(directions[partIndex], dir);
-    courseDir[partIndex] = dir;
-
-    int index = 3;
-    int value = 0;
-    while (index < count)
-      {
-      value = (value * 10) + (buff[index] - '0');
-      index++;
-    }
-    if (value > 4095)
-      value = 4095;
-    if (value < 0)
-      value = 0;
-
-    prevCoupleTimes[partIndex] = (millis() == 0 ? 1 : millis());
-
-    digitalWrite(disables[partIndex], LOW);
-    analogWrite(clocks[partIndex], value);
-    }
-  }
-  }
-}*/
-
-void moveContinuousMotor(byte *buff, int count)
+void moveContinuousMotor(char *buff, int count)
 {
     if (count >= 3)
     {
@@ -117,7 +72,7 @@ void moveContinuousMotor(byte *buff, int count)
 
                 if ((dir == LOW && digitalRead(DECK_ALIGNSTOP) == HIGH) || (dir == HIGH && digitalRead(DECK_INSOLSTOP) == HIGH))
                 {
-                    digitalWrite(DECK_DIRECTION, dir);
+                    deckMotor.setDirection(dir);
                     courseDir = dir;
 
                     int index = 3;
@@ -135,8 +90,8 @@ void moveContinuousMotor(byte *buff, int count)
                     uint32_t timestamp = millis();
 
                     prevCoupleTimes = (timestamp == 0 ? 1 : timestamp);
-                    digitalWrite(DECK_DISABLE, LOW);
-                    analogWrite(DECK_CLOCK, value);
+                    deckMotor.enable(true);
+                    deckMotor.setSpeed(value);
                 }
             }
         }
@@ -145,18 +100,9 @@ void moveContinuousMotor(byte *buff, int count)
 
 void stopMotor()
 {
-    analogWrite(DECK_CLOCK, 0);
-    digitalWrite(DECK_DISABLE, HIGH);
+    deckMotor.stop();
     prevCoupleTimes = 0;
 }
-
-/*
-void toggleDrawer()
-{
-  byte buff[3] = {2, 'C', 'T'};
-  Serial.write(buff, 3);
-}
-*/
 
 void stopForward()
 {
@@ -168,9 +114,30 @@ void stopForward()
     }
     if (state != stopStates[0])
     {
-        byte buff[5] = {4, 'C', '1', 'F', state + '0'};
-        Com::send(serial_packet_t((uint8_t *)&buff[1], 4));
+        byte buff[] = {'C', '1', 'F', state + '0'};
+        Com::send(serial_packet_t((uint8_t *)&buff[1], sizeof(buff)));
         stopStates[0] = state;
+    }
+}
+
+void setTorqueLimit(char *buff, int count)
+{
+    if (count >= 3)
+    {
+        int dir = (buff[1] == 'F' || buff[1] == 'f') ? 0 : 1;
+        int index = 2;
+        int value = 0;
+        while (index < count)
+        {
+            value = (value * 10) + (buff[index] - '0');
+            index++;
+        }
+        if (value > 4095)
+            value = 4095;
+        if (value < 0)
+            value = 0;
+
+        torqueLimit[dir] = value;
     }
 }
 
@@ -184,8 +151,8 @@ void stopBackward()
     }
     if (state != stopStates[1])
     {
-        byte buff[5] = {4, 'C', '1', 'B', state + '0'};
-        Com::send(serial_packet_t((uint8_t *)&buff[1], 4));
+        byte buff[] = {'C', '1', 'B', state + '0'};
+        Com::send(serial_packet_t((uint8_t *)&buff[1], sizeof(buff)));
         stopStates[1] = state;
     }
 }
@@ -203,51 +170,9 @@ void VerificationStops()
 
 void sendAllMotorStops()
 {
-    byte buff[5] = {4, 'C', '1', 'F', stopStates[0] + '0'};
-    Com::send(serial_packet_t((uint8_t *)&buff[1], 4));
-    buff[3] = 'B';
-    buff[4] = stopStates[1] + '0';
-    Com::send(serial_packet_t((uint8_t *)&buff[1], 4));
-}
-
-void setTorqueLimit(byte *buff, int count)
-{
-    if (count >= 4)
-    {
-        if (buff[1] == 'F' || buff[1] == 'f')
-        {
-            boolean dir;
-            if (buff[2] == 'F' || buff[2] == 'f')
-            {
-                dir = 0;
-            }
-            else
-            {
-                dir = 1;
-            }
-            int i(3);
-            int value(0);
-            while (i < count)
-            {
-                value = (value * 10) + (buff[i] - '0');
-                i++;
-            }
-            if (value >= 0 && value <= 4095)
-            {
-                torqueLimit[dir] = value;
-                byte buff[7]     = {6, count, 'T', 'F', (dir ? 'B' : 'F'), lowByte(value >> 8), lowByte(value)};
-                Com::send(serial_packet_t((uint8_t *)&buff[1], 6));
-            }
-            else
-            {
-                byte buff[5] = {4, '#', '1', lowByte(value >> 8), lowByte(value)};
-                Com::send(serial_packet_t((uint8_t *)&buff[1], 4));
-            }
-        }
-    }
-    else
-    {
-        byte buff[4] = {3, '#', '2', count};
-        Com::send(serial_packet_t((uint8_t *)&buff[1], 3));
-    }
+    byte buff[] = {'C', '1', 'F', stopStates[0] + '0'};
+    Com::send(serial_packet_t((uint8_t *)&buff[1], sizeof(buff)));
+    buff[2] = 'B';
+    buff[3] = stopStates[1] + '0';
+    Com::send(serial_packet_t((uint8_t *)&buff[1], sizeof(buff)));
 }

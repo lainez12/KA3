@@ -7,7 +7,7 @@
 
 void setupInsolation();
 void stopInsolation(char code);
-void initInsolation(byte *buff, int count);
+void initInsolation(char *buff, int count);
 void startInsolationCycle(unsigned long time, unsigned int power, unsigned int couronne);
 void moyennageInsol(void);
 void multiplexFeedback();
