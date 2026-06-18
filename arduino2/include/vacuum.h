@@ -8,7 +8,7 @@
 void setupVacuumsensor();
 void setupElectrovanne();
 void sendStateSensor(char *buff, int count);
-void getSolenoidPower(char *buff, int count);
+void getSolenoidPower(const char *buff, uint32_t count);
 void sendCompressedAirValveState(void);
 void sendCompressedAirSensorState(void);
 void sendCompressedAirSensorState(bool pinState);

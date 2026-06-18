@@ -48,7 +48,7 @@ void setSolenoid(char *buff, int count)
     int dir(buff[3] == '1' ? HIGH : LOW);
     // + <PUISSANCE> (1 à 4 octéts, positions 4 à 7)
     int index = 4;
-    int value = 0;
+    uint32_t value = 0;
 
     while (index < count)
     {
@@ -56,9 +56,9 @@ void setSolenoid(char *buff, int count)
         index++;
     }
 
-    if (value > 4095)
+    if (value > 4095u)
     {
-        value = 4095;
+        value = 4095u;
     }
     else if (value < 0)
     {
@@ -119,7 +119,7 @@ void toggleCompressedAirValveState(char *buff, int count)
     }
 }
 
-void getSolenoidPower(const char *buff, int count)
+void getSolenoidPower(const char *buff, uint32_t count)
 {
     if (count < 3)
         return;
@@ -134,7 +134,7 @@ void getSolenoidPower(const char *buff, int count)
     // Select variables based on target
     const uint8_t index = isMask ? 0 : 1;
     const uint8_t state = digitalRead(directionElectrovanne[index]);
-    uint32_t power      = powersElectrovanne[index]; // Using long to safely cover any integer type
+    uint32_t power      = powersElectrovanne[index];
 
     // Construct payload manually on the stack
     uint8_t payload[64];
@@ -147,7 +147,7 @@ void getSolenoidPower(const char *buff, int count)
     // Append State
     payload[len++] = state ? '1' : '0';
     // Append Power (integer to ASCII conversion)
-    len += intToAscii(&payload[len], power);
+    len += uintToAscii(&payload[len], power);
 
     // Send the packet
     Com::send(serial_packet_t(payload, len));
