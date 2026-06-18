@@ -48,7 +48,7 @@ void setSolenoid(char *buff, int count)
     int dir(buff[3] == '1' ? HIGH : LOW);
     // + <PUISSANCE> (1 à 4 octéts, positions 4 à 7)
     int index = 4;
-    int value = 0;
+    uint32_t value = 0;
 
     while (index < count)
     {
@@ -56,9 +56,9 @@ void setSolenoid(char *buff, int count)
         index++;
     }
 
-    if (value > 4095)
+    if (value > 4095u)
     {
-        value = 4095;
+        value = 4095u;
     }
     else if (value < 0)
     {
@@ -67,7 +67,7 @@ void setSolenoid(char *buff, int count)
 
     digitalWrite(directionElectrovanne[state], dir);
     digitalWrite(disablesElectrovanne[state], LOW);
-    if (powersElectrovanne[state] != (uint32_t)value)
+    if (powersElectrovanne[state] != value)
     {
         analogWrite(clocksElectrovanne[state], value);
         powersElectrovanne[state] = value;
@@ -147,7 +147,7 @@ void getSolenoidPower(const char *buff, uint32_t count)
     // Append State
     payload[len++] = state ? '1' : '0';
     // Append Power (integer to ASCII conversion)
-    len += intToAscii(&payload[len], static_cast<long>(power));
+    len += uintToAscii(&payload[len], power);
 
     // Send the packet
     Com::send(serial_packet_t(payload, len));
