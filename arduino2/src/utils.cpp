@@ -2,7 +2,7 @@
 
 // Helper function: Converts an integer to an ASCII string in a pre-allocated buffer
 // Returns the number of characters written.
-uint16_t intToAscii(uint8_t *buffer, long value)
+uint16_t uintToAscii(uint8_t *buffer, uint32_t value)
 {
     uint16_t len = 0;
 
