@@ -235,7 +235,7 @@ void processInstruction(char *buff, uint32_t size)
                 }
                 else if (size >= 3 && (buff[2] == 'E' || buff[2] == 'e'))
                 {
-                    getSolenoidPower(buff, size);
+                    //getSolenoidPower(buff, size);
                 }
             }
             else if ((buff[1] == 'A' || buff[1] == 'a'))

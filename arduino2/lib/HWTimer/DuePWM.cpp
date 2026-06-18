@@ -12,9 +12,7 @@ bool DuePWM::begin(uint32_t frequency, uint32_t maxResolution)
     _resolution = maxResolution;
 
     // Mapping the Arduino Pin to the PWM and Peripheral Channels of the SAM3X8E
-    Pio *pioPort;
-    uint32_t pinMask;
-    uint32_t peripheral;
+    const HW_PWM_PinInfo* pinData = nullptr;
 
     for (uint8_t i = 0; i < NUM_HW_PWM_PINS; i++)
     {
