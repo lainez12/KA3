@@ -9,8 +9,8 @@
 
 #include "SerialTXHandler.h"
 #include "deck.h"
-#include "insolation.h"
 #include "definitions.h"
+#include "insolation.h"
 #include "pins.h"
 #include "stops.h"
 #include "temperature.h"
@@ -42,9 +42,7 @@ bool StatePow                                                    = true;
 static const uint8_t EMERGENCY_STOP_SEQ[EMERGENCY_STOP_SEQ_SIZE] = {'E', 0x7F, 0x7F};
 unsigned long lastHeartbeatTime                                  = 0;
 
-
 void processInstruction(char *buff, uint32_t size);
-
 
 void setup()
 {
@@ -125,7 +123,7 @@ static void sendHeartbeat(void)
 
     if (currentMillis - lastHeartbeatTime >= HEARTBEAT_INTERVAL)
     {
-        lastHeartbeatTime      = currentMillis;
+        lastHeartbeatTime               = currentMillis;
         const uint8_t heartbeatPacket[] = {'H', 'B'};
         Com::send(serial_packet_t(heartbeatPacket, sizeof(heartbeatPacket)));
     }
@@ -259,18 +257,13 @@ void processInstruction(char *buff, uint32_t size)
         }
         else
         {
-            sendPlainPacketSize((byte *)VERSION, VERSION_STR_SIZE);
+            Com::send(serial_packet_t((const uint8_t *)VERSION, VERSION_STR_SIZE));
         }
         break;
     }
     default:
         break;
     }
-}
-
-void sendPlainPacketSize(byte *message, int count)
-{
-    Com::send(serial_packet_t(message, count));
 }
 
 void finishExtinction(void)

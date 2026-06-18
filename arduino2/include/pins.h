@@ -3,8 +3,6 @@
 
 #include <Arduino.h>
 
-void sendPlainPacketSize(byte *message, int count);
-
 /* ---------------Vacuum-----------------------*/
 
 #define SM_DISABLE   7

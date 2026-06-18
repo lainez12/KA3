@@ -1,5 +1,5 @@
-#include "SerialTXHandler.h"
 #include "temperature.h"
+#include "SerialTXHandler.h"
 
 static int fanVoltages[NUMBER_IT];
 
@@ -36,8 +36,8 @@ void checkTemperature(char *buff, int count)
     }
     if (temp != -1)
     {
-        byte buffTemp[6] = {5, 'I', 'T', buff[2], highByte(temp), lowByte(temp)};
-        Com::send(serial_packet_t((uint8_t *)&buffTemp[1], 5));
+        uint8_t buffTemp[] = {'I', 'T', buff[2], highByte(temp), lowByte(temp)};
+        Com::send(serial_packet_t(buffTemp, sizeof(buffTemp)));
     }
 }
 
@@ -56,10 +56,10 @@ void checkFans()
         enoughValuesGathered = true;
     }
 
-    int fanVal   = mean(fanVoltages, NUMBER_IT);
-    byte buff[5] = {4, 'I', 'F', highByte(fanVal), lowByte(fanVal)};
+    int fanVal     = mean(fanVoltages, NUMBER_IT);
+    uint8_t buff[] = {'I', 'F', highByte(fanVal), lowByte(fanVal)};
 
-    Com::send(serial_packet_t((uint8_t *)&buff[1], 4));
+    Com::send(serial_packet_t(buff, sizeof(buff)));
 }
 
 static int mean(int *list, uint32_t size)

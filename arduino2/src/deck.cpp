@@ -1,24 +1,21 @@
 #include <Arduino.h>
 
+#include "DueDCMotor.hpp"
 #include "SerialTXHandler.h"
 #include "deck.h"
-#include "DueDCMotor.hpp"
-
 
 static DueDCMotor deckMotor(
     due_dc_motor_pins_t{
         .disable   = DECK_DISABLE,
         .direction = DECK_DIRECTION,
         .pwm       = DECK_CLOCK,
-        .torque    = DECK_COUPLE
-    }
-);
+        .torque    = DECK_COUPLE});
 
-static unsigned int courseDir = 0;
-static unsigned long prevCoupleTimes = 0;
+static unsigned int courseDir          = 0;
+static unsigned long prevCoupleTimes   = 0;
 static unsigned long previousStopsTime = 0;
-static unsigned int stopStates[2] = {HIGH, HIGH};
-static int torqueLimit[2] = {2750, 2481};
+static unsigned int stopStates[2]      = {HIGH, HIGH};
+static int torqueLimit[2]              = {2750, 2481};
 
 void setupDeck()
 {
@@ -37,7 +34,7 @@ void loopDeckTorque()
     if (prevCoupleTimes > 0 && (unsigned long)(millis() - prevCoupleTimes) >= 200)
     {
         prevCoupleTimes = (millis() == 0 ? 1 : millis());
-        int dir = (courseDir == HIGH) ? 1 : 0;
+        int dir         = (courseDir == HIGH) ? 1 : 0;
         if (deckMotor.readTorque() > torqueLimit[dir])
         {
             coupleStop();
@@ -49,7 +46,7 @@ void coupleStop()
 {
     stopMotor();
     byte buff[] = {'C', 'L', '1'};
-    Com::send(serial_packet_t((uint8_t *)&buff[1], sizeof(buff)));
+    Com::send(serial_packet_t(buff, sizeof(buff)));
 }
 
 //  -------------------------------------------------------------------------
@@ -115,7 +112,7 @@ void stopForward()
     if (state != stopStates[0])
     {
         byte buff[] = {'C', '1', 'F', state + '0'};
-        Com::send(serial_packet_t((uint8_t *)&buff[1], sizeof(buff)));
+        Com::send(serial_packet_t((uint8_t *)buff, sizeof(buff)));
         stopStates[0] = state;
     }
 }
@@ -124,7 +121,7 @@ void setTorqueLimit(char *buff, int count)
 {
     if (count >= 3)
     {
-        int dir = (buff[1] == 'F' || buff[1] == 'f') ? 0 : 1;
+        int dir   = (buff[1] == 'F' || buff[1] == 'f') ? 0 : 1;
         int index = 2;
         int value = 0;
         while (index < count)
@@ -152,7 +149,7 @@ void stopBackward()
     if (state != stopStates[1])
     {
         byte buff[] = {'C', '1', 'B', state + '0'};
-        Com::send(serial_packet_t((uint8_t *)&buff[1], sizeof(buff)));
+        Com::send(serial_packet_t((uint8_t *)buff, sizeof(buff)));
         stopStates[1] = state;
     }
 }
@@ -171,8 +168,8 @@ void VerificationStops()
 void sendAllMotorStops()
 {
     byte buff[] = {'C', '1', 'F', stopStates[0] + '0'};
-    Com::send(serial_packet_t((uint8_t *)&buff[1], sizeof(buff)));
+    Com::send(serial_packet_t((uint8_t *)buff, sizeof(buff)));
     buff[2] = 'B';
     buff[3] = stopStates[1] + '0';
-    Com::send(serial_packet_t((uint8_t *)&buff[1], sizeof(buff)));
+    Com::send(serial_packet_t((uint8_t *)buff, sizeof(buff)));
 }

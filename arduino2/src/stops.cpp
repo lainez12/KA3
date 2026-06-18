@@ -1,8 +1,8 @@
-#include "SerialTXHandler.h"
 #include "stops.h"
+#include "SerialTXHandler.h"
 #include <Arduino.h>
 
-static unsigned long previousStopsArdkoTime = 0;
+static uint32_t previousStopsArdkoTime = 0;
 
 unsigned int StatesArtDeco[4] = {LOW, LOW, LOW, LOW};
 
@@ -24,8 +24,8 @@ void sendAllStopARTDECO()
 {
     for (int i = 0; i < 4; i++)
     {
-        byte buff[4] = {3, 'K', i + '1', digitalRead(stopStatesARTDECO[i])};
-        Com::send(serial_packet_t((uint8_t *)&buff[1], 3));
+        uint8_t buff[] = {'K', i + '1', digitalRead(stopStatesARTDECO[i])};
+        Com::send(serial_packet_t(buff, sizeof(buff)));
     }
 }
 
@@ -48,35 +48,38 @@ void sendStateStopARTDECO(char *buff, int count)
     if (count >= 3)
     {
         int index = buff[2] - '1';
+
         if (index < 0 || index > 3)
-        {
             return;
-        }
-        byte buffOut[4] = {3, 'K', buff[2], digitalRead(stopStatesARTDECO[index]) + '0'};
-        Com::send(serial_packet_t((uint8_t *)&buffOut[1], 3));
+
+        uint8_t buffOut[] = {'K', buff[2], digitalRead(stopStatesARTDECO[index]) + '0'};
+        Com::send(serial_packet_t(buffOut, sizeof(buffOut)));
     }
     else
     {
         for (int i = 0; i < 4; i++)
         {
-            byte buff[4] = {3, 'K', i + '1', digitalRead(stopStatesARTDECO[i]) + '0'};
-            Com::send(serial_packet_t((uint8_t *)&buff[1], 3));
+            uint8_t buff[] = {'K', i + '1', digitalRead(stopStatesARTDECO[i]) + '0'};
+            Com::send(serial_packet_t(buff, sizeof(buff)));
         }
     }
 }
 
 void verificationStopsArdko()
 {
-    if ((unsigned long)(millis() - previousStopsArdkoTime) >= 100)
+    if (millis() - previousStopsArdkoTime >= 100)
     {
         previousStopsArdkoTime = millis();
         for (int i = 0; i < 4; ++i)
         {
-            boolean state = digitalRead(stopStatesARTDECO[i]);
+            const bool state = digitalRead(stopStatesARTDECO[i]);
+
             if (state != StatesArtDeco[i])
             {
-                byte buff[4] = {3, 'K', (i + 1) + '0', state + '0'};
-                Com::send(serial_packet_t((uint8_t *)&buff[1], 3));
+                uint8_t ardkoByteCode = i + '1';
+                uint8_t buff[]        = {'K', ardkoByteCode, state + '0'};
+
+                Com::send(serial_packet_t(buff, sizeof(buff)));
                 StatesArtDeco[i] = state;
             }
         }

@@ -289,12 +289,9 @@ void stopInsolation(char code)
     digitalWrite(GET_EN, LOW);
     digitalWrite(GET_EN_C, LOW);
 
-    byte buff[3];
-    buff[0] = 2;
-    buff[1] = 'I';
-    buff[2] = code;
+    byte buff[] = {'I', code};
 
-    Com::send(serial_packet_t((uint8_t *)&buff[1], 2));
+    Com::send(serial_packet_t(buff, sizeof(buff)));
 }
 
 void interruptExposure()
@@ -346,9 +343,19 @@ void moyennageInsol(void)
         }
     }
 
-    byte buff[12] = {11, 'I', 'V', multiplex, lowByte(tens[0] >> 8), lowByte(tens[0]), lowByte(offset[0] >> 8), lowByte(offset[0]),
-                     lowByte(tens[1] >> 8), lowByte(tens[1]), lowByte(offset[1] >> 8), lowByte(offset[1])};
-    Com::send(serial_packet_t((uint8_t *)&buff[1], 11));
+    byte buff[] = {
+        'I',
+        'V',
+        multiplex,
+        lowByte(tens[0] >> 8),
+        lowByte(tens[0]),
+        lowByte(offset[0] >> 8),
+        lowByte(offset[0]),
+        lowByte(tens[1] >> 8),
+        lowByte(tens[1]),
+        lowByte(offset[1] >> 8),
+        lowByte(offset[1])};
+    Com::send(serial_packet_t(buff, sizeof(buff)));
 }
 
 unsigned long getCycleTime()

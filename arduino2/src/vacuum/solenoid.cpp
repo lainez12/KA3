@@ -1,21 +1,17 @@
 #include <string.h>
 
 #include "SerialTXHandler.h"
+#include "utils.h"
 #include "vacuum.h"
 
 static boolean runnings[2]     = {false, false};
 static String trame            = "";
 static bool compressedAirState = false;
 
-static unsigned int directionElectrovanne[2] = {SM_DIRECTION, SW_DIRECTION};
-static unsigned int disablesElectrovanne[2]  = {SM_DISABLE, SW_DISABLE};
-static unsigned int clocksElectrovanne[2]    = {SM_CLOCK, SW_CLOCK};
-static unsigned int powersElectrovanne[2]    = {0, 0};
-
-static void sendPlainPacketSizeSolenoid(byte *message, int count)
-{
-    Com::send(serial_packet_t(message, count));
-}
+static uint32_t directionElectrovanne[2] = {SM_DIRECTION, SW_DIRECTION};
+static uint32_t disablesElectrovanne[2]  = {SM_DISABLE, SW_DISABLE};
+static uint32_t clocksElectrovanne[2]    = {SM_CLOCK, SW_CLOCK};
+static uint32_t powersElectrovanne[2]    = {0, 0};
 
 void setupElectrovanne()
 {
@@ -53,11 +49,13 @@ void setSolenoid(char *buff, int count)
     // + <PUISSANCE> (1 à 4 octéts, positions 4 à 7)
     int index = 4;
     int value = 0;
+
     while (index < count)
     {
         value = (value * 10) + (buff[index] - '0');
         index++;
     }
+
     if (value > 4095)
     {
         value = 4095;
@@ -121,20 +119,36 @@ void toggleCompressedAirValveState(char *buff, int count)
     }
 }
 
-void getSolenoidPower(char *buff, int count)
+void getSolenoidPower(const char *buff, int count)
 {
+    if (count < 3)
+        return;
 
-    if (count >= 3)
-    {
-        if ((buff[3] == 'M' || buff[3] == 'm') && (buff[0] == '?') || (buff[2] == 'M' || buff[2] == 'm'))
-        {
-            String buffTemp = "VEM" + String(digitalRead(directionElectrovanne[0])) + String(powersElectrovanne[0]);
-            sendPlainPacketSizeSolenoid((byte *)buffTemp.c_str(), buffTemp.length());
-        }
-        else
-        {
-            String buffTemp = "VEW" + String(digitalRead(directionElectrovanne[1])) + String(powersElectrovanne[1]);
-            sendPlainPacketSizeSolenoid((byte *)buffTemp.c_str(), buffTemp.length());
-        }
-    }
+    bool isMask = false;
+
+    if (buff[2] == 'M' || buff[2] == 'm')
+        isMask = true;
+    else if (count >= 4 && buff[0] == '?' && (buff[3] == 'M' || buff[3] == 'm'))
+        isMask = true;
+
+    // Select variables based on target
+    const uint8_t index = isMask ? 0 : 1;
+    const uint8_t state = digitalRead(directionElectrovanne[index]);
+    uint32_t power      = powersElectrovanne[index]; // Using long to safely cover any integer type
+
+    // Construct payload manually on the stack
+    uint8_t payload[64];
+    uint16_t len = 0;
+
+    // Append Prefix: "VEM" or "VEW"
+    payload[len++] = 'V';
+    payload[len++] = 'E';
+    payload[len++] = isMask ? 'M' : 'W';
+    // Append State
+    payload[len++] = state ? '1' : '0';
+    // Append Power (integer to ASCII conversion)
+    len += intToAscii(&payload[len], power);
+
+    // Send the packet
+    Com::send(serial_packet_t(payload, len));
 }
