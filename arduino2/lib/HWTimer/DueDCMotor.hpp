@@ -2,7 +2,7 @@
 #define DUE_DC_MOTOR_H
 
 #include <Arduino.h>
-#include "DuePWM.hpp"
+#include "DueTimerPWM.hpp"
 
 
 typedef struct due_dc_motor_pins_s
@@ -41,7 +41,7 @@ public:
     uint32_t readTorque(void) const; // Reads the torque sensor value
 
 private:
-    DuePWM m_pwm; // Instance of the hardware PWM controller
+    DueTimerPWM m_pwm; // Instance of the hardware PWM controller
     const due_dc_motor_pins_t m_pins;
 
     // Internal state
