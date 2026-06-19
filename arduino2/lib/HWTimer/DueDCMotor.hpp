@@ -2,11 +2,10 @@
 #define DUE_DC_MOTOR_H
 
 #include <Arduino.h>
-#include "DueTimerPWM.hpp"
 
+#include "DueTimer.hpp"
 
-typedef struct due_dc_motor_pins_s
-{
+typedef struct due_dc_motor_pins_s {
     uint32_t disable;   // Pin to enable/disable (e.g., DECK_DISABLE 10)
     uint32_t direction; // Pin for direction (e.g., DECK_DIRECTION 11)
     uint32_t pwm;       // Pin for speed PWM (e.g., DECK_CLOCK 12)
@@ -36,12 +35,12 @@ public:
     uint8_t direction(void) const;
     bool isEnabled(void) const;
     uint32_t currentSpeed(void) const;
-    
+
     // Analog getter
     uint32_t readTorque(void) const; // Reads the torque sensor value
 
 private:
-    DueTimerPWM m_pwm; // Instance of the hardware PWM controller
+    DueTimer m_timer; // Unified Timer Class Reference
     const due_dc_motor_pins_t m_pins;
 
     // Internal state

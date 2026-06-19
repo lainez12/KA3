@@ -28,6 +28,8 @@ void setupDeck()
     stopStates[1] = !digitalRead(DECK_INSOLSTOP);
 }
 
+// volatile uint16_t spd = 0;
+
 void loopDeckTorque()
 {
     // Limiteur de couple
@@ -40,6 +42,17 @@ void loopDeckTorque()
             coupleStop();
         }
     }
+
+    // static uint32_t lchk = 0;
+
+    // if (millis() - lchk > 20)
+    // {
+    //     lchk = millis();
+    //     spd += 5;
+    //     if (spd >= 4095)
+    //         spd = 0;
+    //     deckMotor.setSpeed(spd);
+    // }
 }
 
 void coupleStop()
