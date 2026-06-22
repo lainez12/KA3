@@ -27,6 +27,8 @@ bool DueDCMotor::setup(uint32_t frequency, uint32_t maxResolution)
 
     bool success = m_timer.beginPWM(frequency);
     success &= m_timer.attachPWMPin(m_pins.pwm);
+
+    this->setSpeed(0);
     // Start the underlying clock so duty cycle updates take effect
     m_timer.start();
 
