@@ -1,188 +1,261 @@
-#include <Arduino.h>
-
+#include "deck.h"
 #include "DueDCMotor.hpp"
 #include "SerialTXHandler.h"
-#include "deck.h"
+#include "pins.h"
 
-static DueDCMotor deckMotor(
-    due_dc_motor_pins_t{
-        .disable   = DECK_DISABLE,
-        .direction = DECK_DIRECTION,
-        .pwm       = DECK_CLOCK,
-        .torque    = DECK_COUPLE});
+// -----------------------------------------------------------------------------
+// Constants & Mappings
+// -----------------------------------------------------------------------------
 
-static unsigned int courseDir          = 0;
-static unsigned long prevCoupleTimes   = 0;
-static unsigned long previousStopsTime = 0;
-static unsigned int stopStates[2]      = {HIGH, HIGH};
-static int torqueLimit[2]              = {2750, 2481};
+#define LIMIT_FORWARD_IDX  0
+#define LIMIT_BACKWARD_IDX 1
 
-void setupDeck()
+#define MOTOR_DIR_FORWARD  LOW
+#define MOTOR_DIR_BACKWARD HIGH
+
+#define DECK_PWM_FREQUENCY      20000
+#define DECK_MAX_RESOLUTION     4095
+#define TORQUE_POLL_INTERVAL_MS 200
+#define SAFETY_POLL_INTERVAL_MS 100
+
+namespace Deck
 {
-    deckMotor.setup(20000, 4095);
-
-    digitalWrite(DECK_DISABLE, HIGH);
-    digitalWrite(DECK_DIRECTION, HIGH);
-
-    stopStates[0] = !digitalRead(DECK_ALIGNSTOP);
-    stopStates[1] = !digitalRead(DECK_INSOLSTOP);
-}
-
-// volatile uint16_t spd = 0;
-
-void loopDeckTorque()
-{
-    // Limiteur de couple
-    if (prevCoupleTimes > 0 && (unsigned long)(millis() - prevCoupleTimes) >= 200)
+    // The unnamed namespace acts as a strict translation unit boundary, hiding these
+    // state variables and helpers from the rest of the firmware architecture.
+    namespace
     {
-        prevCoupleTimes = (millis() == 0 ? 1 : millis());
-        int dir         = (courseDir == HIGH) ? 1 : 0;
-        if (deckMotor.readTorque() > torqueLimit[dir])
+        DueDCMotor deckMotor(
+            due_dc_motor_pins_t{
+                .disable   = DECK_DISABLE,
+                .direction = DECK_DIRECTION,
+                .pwm       = DECK_CLOCK,
+                .torque    = DECK_COUPLE});
+
+        // Hardware mapping arrays for O(1) logic resolution
+        const uint8_t limitPins[2]       = {DECK_ALIGNSTOP, DECK_INSOLSTOP};
+        const uint8_t limitDirections[2] = {MOTOR_DIR_FORWARD, MOTOR_DIR_BACKWARD};
+        const uint8_t limitByteCodes[2]  = {'F', 'B'};
+
+        // Internal State Caching
+        volatile bool limitStates[2]      = {false, false};
+        volatile uint8_t currentDirection = MOTOR_DIR_FORWARD;
+        int32_t torqueLimits[2]           = {2750, 2481}; // Forward/Backward default limits
+
+        /**
+         * @brief Immediately halts the motor and notifies the host of a torque overload.
+         */
+        void _triggerTorqueStop()
         {
-            coupleStop();
+            deckMotor.stop();
+            const uint8_t buffer[] = {'C', 'L', '1'};
+            Com::send(serial_packet_t(buffer, sizeof(buffer)));
+        }
+
+        /**
+         * @brief Reads the physical state of a limit pin.
+         * The switches are active LOW mechanically, hence the inversion.
+         */
+        bool _getLimitPinValue(uint8_t limitIdx)
+        {
+            return !digitalRead(limitPins[limitIdx]);
+        }
+
+        /**
+         * @brief Builds and sends the serial message reporting the state of a limit switch.
+         */
+        void _sendLimitStatus(uint8_t limitIdx)
+        {
+            const uint8_t code           = limitByteCodes[limitIdx];
+            const uint8_t limitValueByte = (uint8_t)(limitStates[limitIdx] + '0');
+            const uint8_t buffer[]       = {'C', '1', code, limitValueByte};
+
+            Com::send(serial_packet_t(buffer, sizeof(buffer)));
+        }
+
+        /**
+         * @brief Checks if a limit switch has changed state since we last checked.
+         * Updates the cached state and notifies the host software.
+         */
+        void _syncLimitPinState(uint8_t limitIdx)
+        {
+            const bool state = _getLimitPinValue(limitIdx);
+
+            if (state != limitStates[limitIdx])
+            {
+                limitStates[limitIdx] = state; // Update stored value
+                _sendLimitStatus(limitIdx);
+            }
+        }
+
+        /**
+         * @brief Master logic for limit switch interrupts.
+         * Handles instantaneous collision prevention in O(1) execution time.
+         */
+        void _handleLimitISR(uint8_t limitIdx)
+        {
+            _syncLimitPinState(limitIdx); // Syncs new physical state
+
+            // Safety check: Only stop if the pin is active, motor is running, AND going the wrong way.
+            if (limitStates[limitIdx] && deckMotor.isEnabled() && currentDirection == limitDirections[limitIdx])
+            {
+                deckMotor.stop();
+            }
+        }
+
+        // Hardware Interrupt Routines (ISRs) for each deck limit
+        void isrLimitHandlerForward()
+        {
+            _handleLimitISR(LIMIT_FORWARD_IDX);
+        }
+        void isrLimitHandlerBackward()
+        {
+            _handleLimitISR(LIMIT_BACKWARD_IDX);
         }
     }
 
-    // static uint32_t lchk = 0;
-
-    // if (millis() - lchk > 20)
-    // {
-    //     lchk = millis();
-    //     spd += 5;
-    //     if (spd >= 4095)
-    //         spd = 0;
-    //     deckMotor.setSpeed(spd);
-    // }
-}
-
-void coupleStop()
-{
-    stopMotor();
-    byte buff[] = {'C', 'L', '1'};
-    Com::send(serial_packet_t(buff, sizeof(buff)));
-}
-
-//  -------------------------------------------------------------------------
-//                      CC Motors
-//  -------------------------------------------------------------------------
-
-void moveContinuousMotor(char *buff, int count)
-{
-    if (count >= 3)
+    void setup(void)
     {
-        if (buff[1] == 'F' || buff[1] == 'f')
+        deckMotor.setup(DECK_PWM_FREQUENCY, DECK_MAX_RESOLUTION);
+
+        // Active HIGH logic defaults
+        digitalWrite(DECK_DISABLE, HIGH);
+        digitalWrite(DECK_DIRECTION, HIGH);
+
+        // Initialize Limit Pins and attach hardware EXTI handlers
+        for (uint8_t i = 0; i < 2; ++i)
         {
-            if (buff[2] == 'S' || buff[2] == 's')
+            pinMode(limitPins[i], INPUT);
+            limitStates[i] = _getLimitPinValue(i); // Force sync initial state
+
+            attachInterrupt(digitalPinToInterrupt(limitPins[i]),
+                            (i == LIMIT_FORWARD_IDX) ? isrLimitHandlerForward : isrLimitHandlerBackward,
+                            CHANGE);
+        }
+    }
+
+    void loop(void)
+    {
+        const uint32_t now              = millis();
+        static uint32_t prevTorqueCheck = 0;
+        static uint32_t prevLimitCheck  = 0;
+
+        // 1. Torque Monitoring Loop
+        // Because analogRead() takes ~40us, doing this every 200ms is perfectly non-blocking.
+        if (deckMotor.isEnabled() && (now - prevTorqueCheck >= TORQUE_POLL_INTERVAL_MS))
+        {
+            prevTorqueCheck      = now;
+            const uint8_t dirIdx = (currentDirection == MOTOR_DIR_BACKWARD) ? LIMIT_BACKWARD_IDX : LIMIT_FORWARD_IDX;
+
+            if (deckMotor.readTorque() > (uint32_t)torqueLimits[dirIdx])
             {
-                stopMotor();
+                _triggerTorqueStop();
             }
-            else if ((buff[2] == 'B' || buff[2] == 'b') || (buff[2] == 'F' || buff[2] == 'f'))
+        }
+
+        // 2. Limit Switch Software Fallback Loop
+        // Syncs states periodically in case EMI transient caused a missed EXTI edge
+        if (now - prevLimitCheck >= SAFETY_POLL_INTERVAL_MS)
+        {
+            prevLimitCheck = now;
+            for (uint8_t i = 0; i < 2; ++i)
             {
-                boolean dir = ((buff[2] == 'F' || buff[2] == 'f') ? LOW : HIGH);
+                _syncLimitPinState(i);
 
-                if ((dir == LOW && digitalRead(DECK_ALIGNSTOP) == HIGH) || (dir == HIGH && digitalRead(DECK_INSOLSTOP) == HIGH))
+                // Safety net force stop
+                if (limitStates[i] && deckMotor.isEnabled() && currentDirection == limitDirections[i])
                 {
-                    deckMotor.setDirection(dir);
-                    courseDir = dir;
-
-                    int index = 3;
-                    int value = 0;
-                    while (index < count)
-                    {
-                        value = (value * 10) + (buff[index] - '0');
-                        index++;
-                    }
-                    if (value > 4095)
-                        value = 4095;
-                    if (value < 0)
-                        value = 0;
-
-                    uint32_t timestamp = millis();
-
-                    prevCoupleTimes = (timestamp == 0 ? 1 : timestamp);
-                    deckMotor.enable(true);
-                    deckMotor.setSpeed(value);
+                    deckMotor.stop();
                 }
             }
         }
     }
-}
 
-void stopMotor()
-{
-    deckMotor.stop();
-    prevCoupleTimes = 0;
-}
-
-void stopForward()
-{
-    boolean state = !digitalRead(DECK_ALIGNSTOP);
-
-    if (courseDir == LOW && state == HIGH)
+    void startMotor(char *buff, int count)
     {
-        stopMotor();
-    }
-    if (state != stopStates[0])
-    {
-        byte buff[] = {'C', '1', 'F', state + '0'};
-        Com::send(serial_packet_t((uint8_t *)buff, sizeof(buff)));
-        stopStates[0] = state;
-    }
-}
+        if (count < 3)
+            return;
 
-void setTorqueLimit(char *buff, int count)
-{
-    if (count >= 3)
-    {
-        int dir   = (buff[1] == 'F' || buff[1] == 'f') ? 0 : 1;
-        int index = 2;
-        int value = 0;
-        while (index < count)
+        // Command Format: CF<Dir><Speed> (e.g. CFF2000, CFB1000) or CFS for stop.
+        if (buff[2] == 'S' || buff[2] == 's')
         {
-            value = (value * 10) + (buff[index] - '0');
-            index++;
+            stopMotor();
+            return;
         }
-        if (value > 4095)
-            value = 4095;
+
+        const bool dirIsFront = (buff[2] == 'F' || buff[2] == 'f');
+        const bool dirIsValid = dirIsFront || (buff[2] == 'B' || buff[2] == 'b');
+
+        if (dirIsValid)
+        {
+            const uint8_t targetDir = dirIsFront ? MOTOR_DIR_FORWARD : MOTOR_DIR_BACKWARD;
+            // Evaluate if movement is pre-emptively blocked by a limit switch
+            const uint8_t limitIdx = dirIsFront ? LIMIT_FORWARD_IDX : LIMIT_BACKWARD_IDX;
+
+            if (limitStates[limitIdx])
+                return; // Limit is active, abort start
+
+            int32_t speedValue = 0;
+            for (int i = 3; i < count; ++i)
+            {
+                if (buff[i] >= '0' && buff[i] <= '9')
+                    speedValue = (speedValue * 10) + (buff[i] - '0');
+            }
+
+            if (speedValue > DECK_MAX_RESOLUTION)
+                speedValue = DECK_MAX_RESOLUTION;
+            if (speedValue < 0)
+                speedValue = 0;
+
+            // Disable interrupts to ensure motor start transition is atomic
+            uint32_t primask = __get_PRIMASK();
+            __disable_irq();
+
+            currentDirection = targetDir;
+            deckMotor.setDirection(currentDirection);
+            deckMotor.setSpeed(speedValue);
+            deckMotor.enable(true);
+
+            __set_PRIMASK(primask);
+        }
+    }
+
+    void setTorqueLimit(char *buff, int count)
+    {
+        if (count < 3)
+            return;
+
+        const bool dirIsFront = (buff[1] == 'F' || buff[1] == 'f');
+        const bool dirIsValid = dirIsFront || (buff[1] == 'B' || buff[1] == 'b');
+
+        if (!dirIsValid)
+            return;
+
+        // Command format: TF<Value> or TB<Value>
+        const uint8_t dirIdx = dirIsFront ? LIMIT_FORWARD_IDX : LIMIT_BACKWARD_IDX;
+
+        int32_t value = 0;
+        for (int i = 2; i < count; ++i)
+        {
+            if (buff[i] >= '0' && buff[i] <= '9')
+                value = (value * 10) + (buff[i] - '0');
+        }
+
+        if (value > DECK_MAX_RESOLUTION)
+            value = DECK_MAX_RESOLUTION;
         if (value < 0)
             value = 0;
 
-        torqueLimit[dir] = value;
+        torqueLimits[dirIdx] = value;
     }
-}
 
-void stopBackward()
-{
-    boolean state = !digitalRead(DECK_INSOLSTOP);
-
-    if (courseDir == HIGH && state == HIGH)
+    void stopMotor(void)
     {
-        stopMotor();
+        deckMotor.stop();
     }
-    if (state != stopStates[1])
+
+    void sendAllLimitsValues(void)
     {
-        byte buff[] = {'C', '1', 'B', state + '0'};
-        Com::send(serial_packet_t((uint8_t *)buff, sizeof(buff)));
-        stopStates[1] = state;
+        for (uint8_t i = 0; i < 2; ++i)
+            _sendLimitStatus(i);
     }
-}
-
-void VerificationStops()
-{
-
-    if ((unsigned long)(millis() - previousStopsTime) >= 100)
-    {
-        previousStopsTime = millis();
-        stopBackward();
-        stopForward();
-    }
-}
-
-void sendAllMotorStops()
-{
-    byte buff[] = {'C', '1', 'F', stopStates[0] + '0'};
-    Com::send(serial_packet_t((uint8_t *)buff, sizeof(buff)));
-    buff[2] = 'B';
-    buff[3] = stopStates[1] + '0';
-    Com::send(serial_packet_t((uint8_t *)buff, sizeof(buff)));
 }

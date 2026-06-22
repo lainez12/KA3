@@ -1,14 +1,20 @@
 #ifndef TEMPERATURE_H
-#define TEMERATURE_H
+#define TEMPERATURE_H
 
-#include "pins.h"
 #include <Arduino.h>
 
-#define NUMBER_IT 5
+namespace Temperature
+{
+    /**
+     * @brief Reads inner/outer temperature sensors dynamically based on incoming buffer codes
+     * and streams to the UART DMA handler.
+     */
+    void checkSensors(char *buff, int count);
 
-void checkTemperature(char *buff, int count);
-void checkFans();
-void clearArrayMoyennageTempVoltage();
-void clearArrayMoyennageFanVoltage();
+    /**
+     * @brief Averages the internal system fan pulse feedback to measure rotational speed.
+     */
+    void checkFans(void);
+}
 
-#endif
+#endif // TEMPERATURE_H

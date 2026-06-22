@@ -1,62 +1,66 @@
 /*
- *	Programme pour Arduino Due externe (Programming port ttyACM0)
- *	Revision 8p arduino2 v1.15 (18/02/2026)
+ *  Arduino 2 (Kub3.8i) firmware
  */
 
-#include <SPI.h>
-#include <Wire.h>
-#include <string.h>
+#include <Arduino.h>
 
 #include "SerialTXHandler.h"
+#include "ardko.h"
 #include "deck.h"
 #include "definitions.h"
 #include "insolation.h"
 #include "pins.h"
-#include "stops.h"
 #include "temperature.h"
 #include "vacuum.h"
 
-#define VERSION_STR_SIZE 21u
-
-#define INTERRUP_SOFT 1
-#define INTERRUP_POW  6
-// 'E'mergency 'S'top
+// -----------------------------------------------------------------------------
+// Constants
+// -----------------------------------------------------------------------------
 #define EMERGENCY_STOP_SEQ_SIZE 4
 #define SWITCH_TIME_RELAIS_5V   3000 // milliseconds
 #define HEARTBEAT_INTERVAL      1000 // 1 second
 
-// Définition des prototypes du .ino
+// -----------------------------------------------------------------------------
+// Global States
+// -----------------------------------------------------------------------------
+static const uint8_t EMERGENCY_STOP_SEQ[EMERGENCY_STOP_SEQ_SIZE] = {'E', 0x7F, 0x7F};
+
+unsigned long debounce          = 0;
+unsigned long lastStatePow      = HIGH;
+bool statePowCheck              = true;
+bool statePow                   = true;
+unsigned long lastHeartbeatTime = 0;
+
+// -----------------------------------------------------------------------------
+// Forward Declarations
+// -----------------------------------------------------------------------------
 void finishExtinction(void);
 void checkPow(void);
 void triggerEmergencyStop(void);
 void orderExtinction(void);
-static void sendHeartbeat(void);
-
-// Définition des variables globales
-volatile unsigned long forcePrevTime                             = 0;
-unsigned long debounce                                           = 0;
-unsigned long Debounce_5V                                        = 0;
-unsigned long LastStatePow                                       = HIGH;
-bool statePowCheck                                               = true;
-bool StatePow                                                    = true;
-static const uint8_t EMERGENCY_STOP_SEQ[EMERGENCY_STOP_SEQ_SIZE] = {'E', 0x7F, 0x7F};
-unsigned long lastHeartbeatTime                                  = 0;
-
+// static void sendHeartbeat(void);
 void processInstruction(char *buff, uint32_t size);
 
+// -----------------------------------------------------------------------------
+// Main Arduino Setup
+// -----------------------------------------------------------------------------
 void setup()
 {
     Serial.begin(115200);
-    Com::send(serial_packet_t((const uint8_t *)VERSION, VERSION_STR_SIZE));
+
+    // Announce identity natively using TX handler
+    Com::send(serial_packet_t((const uint8_t *)VERSION, VERSION_SIZE));
 
     analogWriteResolution(12);
     analogReadResolution(12);
-    setupArtDecoStops();
-    setupVacuumsensor();
-    setupElectrovanne();
-    setupDeck();
-    setupInsolation();
 
+    // Subsystems Setup
+    Ardko::setup();
+    Vacuum::setup();
+    Deck::setup();
+    Insolation::setup();
+
+    // Hardware Power Routing
     pinMode(POW_BUTTON, INPUT);
     pinMode(ORDER_EXTINCT, OUTPUT);
     pinMode(ORDER_EXTINCT_10V, OUTPUT);
@@ -69,47 +73,27 @@ void setup()
     digitalWrite(ORDER_EXTINCT_3_3V, HIGH);
     digitalWrite(ORDER_EXTINCT_5V, LOW);
 
-    attachInterrupt(POW_BUTTON, orderExtinction, FALLING);
-    attachInterrupt(EMERGENCY_STOP, triggerEmergencyStop, RISING);
+    attachInterrupt(digitalPinToInterrupt(POW_BUTTON), orderExtinction, FALLING);
+    attachInterrupt(digitalPinToInterrupt(EMERGENCY_STOP), triggerEmergencyStop, RISING);
 
-    /* Ajout d'une fonction délais pour commuter à 1 une fois le relais du 5V */
-
+    // Delay lock execution to stabilize 5V relay line
     delay(SWITCH_TIME_RELAIS_5V);
     digitalWrite(ORDER_EXTINCT_5V, HIGH);
 }
 
+// -----------------------------------------------------------------------------
+// Main Execution Loop
+// -----------------------------------------------------------------------------
 void loop()
 {
-    // sendHeartbeat();
+    // Execution loops for subsystem polling safeties
+    Deck::loop();
+    Ardko::loop();
+    Vacuum::loop();
+    Insolation::loop();
 
-    /*-----------------------DEBUT GESTION MOTEUR TAB-------------------------------*/
-    //  Verification des butees
-    VerificationStops();
-
-    //  Limiteur de couple
-    loopDeckTorque();
-
-    /*----------------------- FIN GESTION MOTEUR TAB-------------------------------*/
-    /*-----------------------DEBUT GESTION BUTÉES ARDKO-------------------------------*/
-
-    //  Verification des butees
-    verificationStopsArdko();
-    /*-----------------------FIN GESTION BUTÉES ARDKO-------------------------------*/
-
-    /*-----------------------DEBUT GESTION DU VIDE-------------------------------*/
-
-    //  Verification de l'état
-    verificationStatesVacuum();
-
-    /*-----------------------FIN GESTION DU VIDE-------------------------------*/
-
-    /*-----------------------DEBUT GESTION INSOL-------------------------------*/
-
-    loopInsolation();
-
-    /*-----------------------FIN GESTION INSOL-------------------------------*/
-    // Système Anti-rebond Bouton Power
-    if (StatePow)
+    // Power Debounce logic
+    if (statePow)
     {
         checkPow();
     }
@@ -117,17 +101,16 @@ void loop()
     Com::processPackets();
 }
 
-static void sendHeartbeat(void)
-{
-    unsigned long currentMillis = millis();
-
-    if (currentMillis - lastHeartbeatTime >= HEARTBEAT_INTERVAL)
-    {
-        lastHeartbeatTime               = currentMillis;
-        const uint8_t heartbeatPacket[] = {'H', 'B'};
-        Com::send(serial_packet_t(heartbeatPacket, sizeof(heartbeatPacket)));
-    }
-}
+// static void sendHeartbeat(void)
+// {
+//     unsigned long currentMillis = millis();
+//     if (currentMillis - lastHeartbeatTime >= HEARTBEAT_INTERVAL)
+//     {
+//         lastHeartbeatTime               = currentMillis;
+//         const uint8_t heartbeatPacket[] = {'H', 'B'};
+//         Com::send(serial_packet_t(heartbeatPacket, sizeof(heartbeatPacket)));
+//     }
+// }
 
 // ---------------------------------------------------------------------
 // Communication Core
@@ -176,101 +159,90 @@ void processInstruction(char *buff, uint32_t size)
     switch (buff[0])
     {
     case 'A':
-    {
         if (size > 1 && (buff[1] == 'C' || buff[1] == 'c'))
-        {
-            toggleCompressedAirValveState(buff, size);
-        }
+            Vacuum::toggleCompressedAirValveState(buff, size);
         break;
-    }
+
     case 'C':
     {
-        moveContinuousMotor(buff, size);
+        if (size > 1 && (buff[1] == 'F' || buff[1] == 'f'))
+            Deck::startMotor(buff, size);
         break;
     }
+
     case 'T':
-    {
-        setTorqueLimit(buff, size);
+        Deck::setTorqueLimit(buff, size);
         break;
-    }
+
     case 'V':
-    {
         if (size > 1 && (buff[1] == 'E' || buff[1] == 'e'))
-        {
-            setSolenoid(buff, size);
-        }
+            Vacuum::setSolenoid(buff, size);
         break;
-    }
+
     case 'I':
-    {
-        if (getCycleTime() == 0 && getNumberCycles() == 0)
-        {
-            initInsolation(buff, size);
-        }
+        if (Insolation::getCycleTime() == 0 && Insolation::getNumberCycles() == 0)
+            Insolation::startCycle(buff, size);
         break;
-    }
+
     case 'S':
-    {
-        stopInsolation('E');
+        Insolation::stopCycle('E');
         break;
-    }
+
     case 'E':
-    {
         finishExtinction();
         break;
-    }
+
     case '?':
-    {
         if (size >= 2)
         {
             if (buff[1] == 'K' || buff[1] == 'k')
             {
-                sendStateStopARTDECO(buff, size);
+                Ardko::sendLimitValue(buff, size);
             }
             else if ((buff[1] == 'V' || buff[1] == 'v'))
             {
                 if (size >= 3 && (buff[2] == 'C' || buff[2] == 'c'))
-                {
-                    sendStateSensor(buff, size);
-                }
+                    Vacuum::sendStateSensor(buff, size);
                 else if (size >= 3 && (buff[2] == 'E' || buff[2] == 'e'))
-                {
-                    getSolenoidPower(buff, size);
-                }
+                    Vacuum::getSolenoidPower(buff, size);
             }
             else if ((buff[1] == 'A' || buff[1] == 'a'))
             {
                 if (size >= 3 && (buff[2] == 'C' || buff[2] == 'c'))
                 {
-                    sendCompressedAirValveState();
-                    sendCompressedAirSensorState();
+                    Vacuum::sendCompressedAirValveState();
+                    Vacuum::sendCompressedAirSensorState();
                 }
             }
             else if (buff[1] == 'C' || buff[1] == 'c')
             {
-                sendAllMotorStops();
+                Deck::sendAllLimitsValues();
             }
             else if ((buff[1] == 'T' || buff[1] == 't'))
             {
-                checkTemperature(buff, size);
+                Temperature::checkSensors(buff, size);
             }
         }
         else
         {
-            Com::send(serial_packet_t((const uint8_t *)VERSION, VERSION_STR_SIZE));
+            Com::send(serial_packet_t((const uint8_t *)VERSION, VERSION_SIZE));
         }
         break;
-    }
+
     default:
         break;
     }
 }
 
+// ---------------------------------------------------------------------
+// Power Safety Logic
+// ---------------------------------------------------------------------
+
 void finishExtinction(void)
 {
     if (digitalRead(POW_BUTTON) == LOW)
     {
-        delay(30000);
+        delay(30000); // Wait strictly 30 seconds before hardware cut
         digitalWrite(ORDER_EXTINCT, LOW);
         digitalWrite(ORDER_EXTINCT_10V, LOW);
         digitalWrite(ORDER_EXTINCT_3_3V, LOW);
@@ -280,36 +252,35 @@ void finishExtinction(void)
 
 void orderExtinction()
 {
-    StatePow = true;
+    statePow = true;
 }
 
 void checkPow(void)
 {
     uint32_t reading = digitalRead(POW_BUTTON);
 
-    if (reading != LastStatePow)
-    {
+    if (reading != lastStatePow)
         debounce = millis();
-    }
-    if (millis() - debounce >= 1000)
+
+    if (millis() - debounce >= 1000) // 1 second debounce
     {
         if (reading != statePowCheck)
         {
-            if (getNumberCycles() > 0)
-            {
-                stopInsolation('E');
-            }
+            if (Insolation::getNumberCycles() > 0)
+                Insolation::stopCycle('E');
+
             const uint8_t buff[] = {'E', 'E'};
             Com::send(serial_packet_t(buff, sizeof(buff)));
+
             statePowCheck = reading;
-            StatePow      = false;
+            statePow      = false;
         }
     }
-    LastStatePow = reading;
+    lastStatePow = reading;
 }
 
 void triggerEmergencyStop(void)
 {
     Com::send(serial_packet_t(EMERGENCY_STOP_SEQ, EMERGENCY_STOP_SEQ_SIZE));
-    interruptExposure(); // Legacy behaviour
+    Insolation::interruptExposure();
 }

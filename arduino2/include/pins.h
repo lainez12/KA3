@@ -89,10 +89,10 @@
 
 /* ---------------CONVEYOR MASK---------------*/
 
-#define ADFG_STOP 23
-#define ADFD_STOP 25
-#define ADBG_STOP 27
-#define ADBD_STOP 29
+#define ARDKO_FRONT_LEFT_LIMIT  23
+#define ARDKO_FRONT_RIGHT_LIMIT 25
+#define ARDKO_BACK_LEFT_LIMIT   27
+#define ARDKO_BACK_RIGHT_LIMIT  29
 
 /* ----------------------- ----------------*/
 
